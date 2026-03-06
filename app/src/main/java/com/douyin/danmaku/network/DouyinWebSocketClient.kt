@@ -3,7 +3,6 @@ package com.douyin.danmaku.network
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.proto.PushFrame
 import com.douyin.danmaku.proto.Response
-import com.google.protobuf.ByteString
 import kotlinx.coroutines.*
 import okhttp3.*
 import java.util.concurrent.TimeUnit
@@ -53,7 +52,7 @@ class DouyinWebSocketClient(
                     // 文本消息，通常不处理
                 }
                 
-                override fun onMessage(webSocket: WebSocket, bytes: ByteString) {
+                override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
                     // 二进制消息，解析弹幕
                     try {
                         val messages = DanmakuParser.parsePushFrame(bytes.toByteArray())
@@ -141,7 +140,7 @@ class DouyinWebSocketClient(
         }
     }
     
-    private fun buildHeartbeat(): ByteString {
+    private fun buildHeartbeat(): okio.ByteString {
         val pushFrame = PushFrame.newBuilder()
             .setSeqId(System.currentTimeMillis())
             .setLogId(System.currentTimeMillis())
@@ -149,7 +148,7 @@ class DouyinWebSocketClient(
             .setMethod(1001)
             .build()
         
-        return ByteString.of(*pushFrame.toByteArray())
+        return okio.ByteString.of(*pushFrame.toByteArray())
     }
     
     fun disconnect() {

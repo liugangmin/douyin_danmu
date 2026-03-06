@@ -2,8 +2,14 @@ package com.douyin.danmaku.network
 
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.model.DanmakuType
-import com.douyin.danmaku.proto.*
-import com.google.protobuf.InvalidProtocolBufferException
+import com.douyin.danmaku.proto.ChatMessage
+import com.douyin.danmaku.proto.GiftMessage
+import com.douyin.danmaku.proto.LikeMessage
+import com.douyin.danmaku.proto.MemberMessage
+import com.douyin.danmaku.proto.FansClubMessage
+import com.douyin.danmaku.proto.RoomUserSeqMessage
+import com.douyin.danmaku.proto.PushFrame
+import com.douyin.danmaku.proto.Response
 
 /**
  * 弹幕消息解析器
@@ -21,93 +27,103 @@ object DanmakuParser {
                 method.contains("FansClubMessage") -> parseFansClubMessage(payload)
                 else -> null
             }
-        } catch (e: InvalidProtocolBufferException) {
-            null
         } catch (e: Exception) {
             null
         }
     }
     
     private fun parseChatMessage(payload: ByteArray): DanmakuMessage? {
-        val chatMessage = ChatMessage.parseFrom(payload)
-        val user = chatMessage.user ?: return null
-        val content = chatMessage.content
-        
-        if (content.isBlank()) return null
-        
-        return DanmakuMessage(
-            type = DanmakuType.CHAT,
-            nickname = user.nickname,
-            content = content,
-            userId = user.id.toString()
-        )
+        return try {
+            val chatMessage = ChatMessage.parseFrom(payload)
+            val user = chatMessage.user ?: return null
+            val content = chatMessage.content
+            if (content.isEmpty()) return null
+            
+            DanmakuMessage(
+                type = DanmakuType.CHAT,
+                nickname = user.nickname,
+                content = content,
+                userId = user.id.toString()
+            )
+        } catch (e: Exception) { null }
     }
     
     private fun parseGiftMessage(payload: ByteArray): DanmakuMessage? {
-        val giftMessage = GiftMessage.parseFrom(payload)
-        val user = giftMessage.user ?: return null
-        
-        return DanmakuMessage(
-            type = DanmakuType.GIFT,
-            nickname = user.nickname,
-            content = "送出了礼物",
-            userId = user.id.toString()
-        )
+        return try {
+            val giftMessage = GiftMessage.parseFrom(payload)
+            val user = giftMessage.user ?: return null
+            
+            DanmakuMessage(
+                type = DanmakuType.GIFT,
+                nickname = user.nickname,
+                content = "送出了礼物",
+                userId = user.id.toString()
+            )
+        } catch (e: Exception) { null }
     }
     
     private fun parseMemberMessage(payload: ByteArray): DanmakuMessage? {
-        val memberMessage = MemberMessage.parseFrom(payload)
-        val user = memberMessage.user ?: return null
-        
-        return DanmakuMessage(
-            type = DanmakuType.ENTER,
-            nickname = user.nickname,
-            content = "进入了直播间",
-            userId = user.id.toString()
-        )
+        return try {
+            val memberMessage = MemberMessage.parseFrom(payload)
+            val user = memberMessage.user ?: return null
+            
+            DanmakuMessage(
+                type = DanmakuType.ENTER,
+                nickname = user.nickname,
+                content = "进入了直播间",
+                userId = user.id.toString()
+            )
+        } catch (e: Exception) { null }
     }
     
     private fun parseLikeMessage(payload: ByteArray): DanmakuMessage? {
-        val likeMessage = LikeMessage.parseFrom(payload)
-        val user = likeMessage.user ?: return null
-        val count = likeMessage.count
-        
-        return DanmakuMessage(
-            type = DanmakuType.LIKE,
-            nickname = user.nickname,
-            content = "点了${count}个赞",
-            userId = user.id.toString()
-        )
+        return try {
+            val likeMessage = LikeMessage.parseFrom(payload)
+            val user = likeMessage.user ?: return null
+            val count = likeMessage.count
+            
+            DanmakuMessage(
+                type = DanmakuType.LIKE,
+                nickname = user.nickname,
+                content = "点了${count}个赞",
+                userId = user.id.toString()
+            )
+        } catch (e: Exception) { null }
     }
     
     private fun parseStatsMessage(payload: ByteArray): DanmakuMessage? {
-        val statsMessage = RoomUserSeqMessage.parseFrom(payload)
-        val total = statsMessage.totalUser
-        val popularity = statsMessage.popularity
-        
-        return DanmakuMessage(
-            type = DanmakuType.STATS,
-            nickname = "系统",
-            content = "当前观看人数: ${formatNumber(popularity)}, 累计观看人数: ${formatNumber(total)}"
-        )
+        return try {
+            val statsMessage = RoomUserSeqMessage.parseFrom(payload)
+            val total = statsMessage.totalUser
+            val popularity = statsMessage.popularity
+            
+            DanmakuMessage(
+                type = DanmakuType.STATS,
+                nickname = "系统",
+                content = "当前观看: ${formatNumber(popularity)}, 累计: ${formatNumber(total)}"
+            )
+        } catch (e: Exception) { null }
     }
     
     private fun parseFansClubMessage(payload: ByteArray): DanmakuMessage? {
-        val fansClubMessage = FansClubMessage.parseFrom(payload)
-        val user = fansClubMessage.user ?: return null
-        
-        return DanmakuMessage(
-            type = DanmakuType.FANS_CLUB,
-            nickname = user.nickname,
-            content = "成为粉丝团成员",
-            userId = user.id.toString()
-        )
+        return try {
+            val fansClubMessage = FansClubMessage.parseFrom(payload)
+            val user = fansClubMessage.user ?: return null
+            
+            DanmakuMessage(
+                type = DanmakuType.FANS_CLUB,
+                nickname = user.nickname,
+                content = "成为粉丝团成员",
+                userId = user.id.toString()
+            )
+        } catch (e: Exception) { null }
     }
     
     private fun formatNumber(num: Long): String {
-        return when {
-            num >= 10000 -> String.format("%.1f万", num / 10000.0)
-            else -> num.toString()
+        return if (num >= 10000) {
+            String.format("%.1f万", num / 10000.0)
+        } else {
+            num.toString()
         }
     }
     
