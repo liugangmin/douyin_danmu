@@ -4,25 +4,17 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.douyin.danmaku.databinding.ActivityMainBinding
-import com.douyin.danmaku.model.RoomInfo
-import com.douyin.danmaku.network.DouyinWebSocketClient
-import com.douyin.danmaku.network.RoomInfoFetcher
+import com.douyin.danmaku.network.WebViewDanmakuFetcher
 import com.douyin.danmaku.ui.DanmakuAdapter
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 class MainActivity : AppCompatActivity() {
     
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: DanmakuAdapter
-    private lateinit var roomInfoFetcher: RoomInfoFetcher
-    private var webSocketClient: DouyinWebSocketClient? = null
+    private lateinit var danmakuFetcher: WebViewDanmakuFetcher
     
-    private var currentRoomInfo: RoomInfo? = null
     private var isConnected = false
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,7 +23,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         
         initViews()
-        initData()
+        initDanmakuFetcher()
     }
     
     private fun initViews() {
@@ -43,8 +35,39 @@ class MainActivity : AppCompatActivity() {
         binding.btnDisconnect.setOnClickListener { disconnect() }
     }
     
-    private fun initData() {
-        roomInfoFetcher = RoomInfoFetcher()
+    private fun initDanmakuFetcher() {
+        danmakuFetcher = WebViewDanmakuFetcher(applicationContext).apply {
+            init()
+            
+            setOnDanmakuCallback { message ->
+                runOnUiThread { 
+                    adapter.addMessage(message)
+                }
+            }
+            
+            setOnConnectedCallback {
+                runOnUiThread {
+                    isConnected = true
+                    updateConnectionStatus(true, false)
+                    Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
+                }
+            }
+            
+            setOnDisconnectedCallback {
+                runOnUiThread {
+                    isConnected = false
+                    updateConnectionStatus(false, false)
+                }
+            }
+            
+            setOnErrorCallback { error ->
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
+                    isConnected = false
+                    updateConnectionStatus(false, false)
+                }
+            }
+        }
     }
     
     private fun connect() {
@@ -60,74 +83,34 @@ class MainActivity : AppCompatActivity() {
         }
         
         updateConnectionStatus(false, true)
+        binding.roomInfoArea.visibility = View.VISIBLE
+        binding.tvRoomTitle.text = "正在连接..."
+        binding.tvViewerCount.text = "房间号: $input"
         
-        lifecycleScope.launch {
-            try {
-                val roomInfo = roomInfoFetcher.fetchRoomInfo(input)
-                if (roomInfo == null) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "无法获取直播间信息", Toast.LENGTH_SHORT).show()
-                        updateConnectionStatus(false, false)
-                    }
-                    return@launch
-                }
-                
-                currentRoomInfo = roomInfo
-                
-                withContext(Dispatchers.Main) {
-                    showRoomInfo(roomInfo)
-                    
-                    val userUniqueId = roomInfoFetcher.generateUserUniqueId()
-                    val signature = generateSignature(roomInfo.roomId, userUniqueId)
-                    
-                    webSocketClient = DouyinWebSocketClient(
-                        onDanmaku = { message ->
-                            runOnUiThread { adapter.addMessage(message) }
-                        },
-                        onConnected = {
-                            runOnUiThread {
-                                isConnected = true
-                                updateConnectionStatus(true, false)
-                                Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
-                            }
-                        },
-                        onDisconnected = {
-                            runOnUiThread {
-                                isConnected = false
-                                updateConnectionStatus(false, false)
-                            }
-                        },
-                        onError = { error ->
-                            runOnUiThread {
-                                Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
-                                isConnected = false
-                                updateConnectionStatus(false, false)
-                            }
-                        }
-                    )
-                    
-                    webSocketClient?.connect(roomInfo.roomId, userUniqueId, signature)
-                }
-            } catch (e: Exception) {
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(this@MainActivity, "连接失败: ${e.message}", Toast.LENGTH_SHORT).show()
-                    updateConnectionStatus(false, false)
-                }
-            }
-        }
+        val roomId = parseRoomId(input)
+        danmakuFetcher.connect(roomId)
     }
     
-    private fun generateSignature(roomId: String, userId: String): String {
-        val timestamp = System.currentTimeMillis()
-        val content = "${roomId}_${userId}__$timestamp"
-        val md = java.security.MessageDigest.getInstance("MD5")
-        val digest = md.digest(content.toByteArray())
-        return digest.joinToString("") { "%02x".format(it) }
+    private fun parseRoomId(input: String): String {
+        val patterns = listOf(
+            Regex("live\\.douyin\\.com/(\\d+)"),
+            Regex("live\\.douyin\\.com/([a-zA-Z0-9_-]+)"),
+            Regex("v\\.douyin\\.com/([a-zA-Z0-9]+)"),
+            Regex("douyin\\.com/live/([a-zA-Z0-9_-]+)")
+        )
+        
+        for (pattern in patterns) {
+            val match = pattern.find(input)
+            if (match != null) {
+                return match.groupValues[1]
+            }
+        }
+        
+        return input
     }
     
     private fun disconnect() {
-        webSocketClient?.disconnect()
-        webSocketClient = null
+        danmakuFetcher.disconnect()
         isConnected = false
         updateConnectionStatus(false, false)
         adapter.clear()
@@ -146,18 +129,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun showRoomInfo(roomInfo: RoomInfo) {
-        binding.roomInfoArea.visibility = View.VISIBLE
-        binding.tvRoomTitle.text = if (roomInfo.title.isNotEmpty()) {
-            roomInfo.title
-        } else {
-            "${roomInfo.anchorName}的直播间"
-        }
-        binding.tvViewerCount.text = "房间号: ${roomInfo.webRoomId}"
-    }
-    
     override fun onDestroy() {
         super.onDestroy()
-        webSocketClient?.disconnect()
+        danmakuFetcher.destroy()
     }
 }
