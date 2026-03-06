@@ -10,26 +10,20 @@ import com.douyin.danmaku.databinding.ActivityMainBinding
 import com.douyin.danmaku.model.RoomInfo
 import com.douyin.danmaku.network.DouyinWebSocketClient
 import com.douyin.danmaku.network.RoomInfoFetcher
-import com.douyin.danmaku.network.WebViewDanmakuFetcher
 import com.douyin.danmaku.ui.DanmakuAdapter
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/**
- * 主界面
- */
 class MainActivity : AppCompatActivity() {
     
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: DanmakuAdapter
     private lateinit var roomInfoFetcher: RoomInfoFetcher
-    private lateinit var webSocketClient: DouyinWebSocketClient
-    private lateinit var webViewFetcher: WebViewDanmakuFetcher
+    private var webSocketClient: DouyinWebSocketClient? = null
     
     private var currentRoomInfo: RoomInfo? = null
     private var isConnected = false
-    private var useWebView = false // 使用WebView模式
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,79 +35,16 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun initViews() {
-        // 设置RecyclerView
         adapter = DanmakuAdapter()
         binding.rvDanmaku.layoutManager = LinearLayoutManager(this)
         binding.rvDanmaku.adapter = adapter
         
-        // 设置按钮点击事件
-        binding.btnConnect.setOnClickListener {
-            connect()
-        }
-        
-        binding.btnDisconnect.setOnClickListener {
-            disconnect()
-        }
+        binding.btnConnect.setOnClickListener { connect() }
+        binding.btnDisconnect.setOnClickListener { disconnect() }
     }
     
     private fun initData() {
         roomInfoFetcher = RoomInfoFetcher()
-        
-        // 初始化WebSocket客户端
-        webSocketClient = DouyinWebSocketClient(
-            onDanmaku = { message ->
-                runOnUiThread {
-                    adapter.addMessage(message)
-                }
-            },
-            onConnected = {
-                runOnUiThread {
-                    isConnected = true
-                    updateConnectionStatus(true, false)
-                    Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
-                }
-            },
-            onDisconnected = {
-                runOnUiThread {
-                    isConnected = false
-                    updateConnectionStatus(false, false)
-                }
-            },
-            onError = { error ->
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "连接错误: $error", Toast.LENGTH_SHORT).show()
-                    isConnected = false
-                    updateConnectionStatus(false, false)
-                }
-            }
-        )
-        
-        // 初始化WebView获取器
-        webViewFetcher = WebViewDanmakuFetcher(this)
-        webViewFetcher.init()
-        webViewFetcher.setOnDanmakuCallback { message ->
-            runOnUiThread {
-                adapter.addMessage(message)
-            }
-        }
-        webViewFetcher.setOnConnectedCallback {
-            runOnUiThread {
-                isConnected = true
-                updateConnectionStatus(true, false)
-                Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
-            }
-        }
-        webViewFetcher.setOnDisconnectedCallback {
-            runOnUiThread {
-                isConnected = false
-                updateConnectionStatus(false, false)
-            }
-        }
-        webViewFetcher.setOnErrorCallback { error ->
-            runOnUiThread {
-                Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
-            }
-        }
     }
     
     private fun connect() {
@@ -128,16 +59,14 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
-        // 显示连接中状态
         updateConnectionStatus(false, true)
         
         lifecycleScope.launch {
             try {
-                // 获取直播间信息
                 val roomInfo = roomInfoFetcher.fetchRoomInfo(input)
                 if (roomInfo == null) {
                     withContext(Dispatchers.Main) {
-                        Toast.makeText(this@MainActivity, "无法获取直播间信息，请检查输入是否正确", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this@MainActivity, "无法获取直播间信息", Toast.LENGTH_SHORT).show()
                         updateConnectionStatus(false, false)
                     }
                     return@launch
@@ -146,15 +75,38 @@ class MainActivity : AppCompatActivity() {
                 currentRoomInfo = roomInfo
                 
                 withContext(Dispatchers.Main) {
-                    // 显示直播间信息
                     showRoomInfo(roomInfo)
                     
-                    // 生成用户ID
                     val userUniqueId = roomInfoFetcher.generateUserUniqueId()
-                    
-                    // 使用WebSocket直连模式
                     val signature = generateSignature(roomInfo.roomId, userUniqueId)
-                    webSocketClient.connect(roomInfo.roomId, userUniqueId, signature)
+                    
+                    webSocketClient = DouyinWebSocketClient(
+                        onDanmaku = { message ->
+                            runOnUiThread { adapter.addMessage(message) }
+                        },
+                        onConnected = {
+                            runOnUiThread {
+                                isConnected = true
+                                updateConnectionStatus(true, false)
+                                Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
+                            }
+                        },
+                        onDisconnected = {
+                            runOnUiThread {
+                                isConnected = false
+                                updateConnectionStatus(false, false)
+                            }
+                        },
+                        onError = { error ->
+                            runOnUiThread {
+                                Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
+                                isConnected = false
+                                updateConnectionStatus(false, false)
+                            }
+                        }
+                    )
+                    
+                    webSocketClient?.connect(roomInfo.roomId, userUniqueId, signature)
                 }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
@@ -174,17 +126,12 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun disconnect() {
-        webSocketClient.disconnect()
-        webViewFetcher.disconnect()
+        webSocketClient?.disconnect()
+        webSocketClient = null
         isConnected = false
         updateConnectionStatus(false, false)
-        
-        // 清空弹幕列表
         adapter.clear()
-        
-        // 隐藏直播间信息
         binding.roomInfoArea.visibility = View.GONE
-        
         Toast.makeText(this, "已断开连接", Toast.LENGTH_SHORT).show()
     }
     
@@ -192,16 +139,10 @@ class MainActivity : AppCompatActivity() {
         binding.btnConnect.isEnabled = !connected && !connecting
         binding.btnDisconnect.isEnabled = connected || connecting
         
-        when {
-            connecting -> {
-                binding.tvStatus.text = getString(R.string.connecting)
-            }
-            connected -> {
-                binding.tvStatus.text = getString(R.string.connected)
-            }
-            else -> {
-                binding.tvStatus.text = getString(R.string.disconnected)
-            }
+        binding.tvStatus.text = when {
+            connecting -> getString(R.string.connecting)
+            connected -> getString(R.string.connected)
+            else -> getString(R.string.disconnected)
         }
     }
     
@@ -217,7 +158,6 @@ class MainActivity : AppCompatActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
-        webSocketClient.disconnect()
-        webViewFetcher.destroy()
+        webSocketClient?.disconnect()
     }
 }
