@@ -36,7 +36,23 @@ android {
     buildFeatures {
         viewBinding = true
     }
+    
+    packaging {
+        resources {
+            excludes += setOf(
+                "META-INF/DEPENDENCIES",
+                "META-INF/LICENSE",
+                "META-INF/LICENSE.txt",
+                "META-INF/NOTICE",
+                "META-INF/NOTICE.txt",
+                "META-INF/ASL2.0",
+                "META-INF/*.kotlin_module"
+            )
+        }
+    }
 }
+
+val liveChatClientVersion = "0.1.4"
 
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
@@ -44,8 +60,8 @@ dependencies {
     implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     
-    // OkHttp for WebSocket
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    // OrdinaryRoad Live Chat Client - 抖音
+    implementation("tech.ordinaryroad:live-chat-client-douyin:$liveChatClientVersion")
     
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
@@ -54,9 +70,6 @@ dependencies {
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.7.0")
-    
-    // JSON parsing
-    implementation("com.google.code.gson:gson:2.10.1")
     
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

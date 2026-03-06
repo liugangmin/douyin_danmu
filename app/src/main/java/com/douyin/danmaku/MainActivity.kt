@@ -6,14 +6,14 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.douyin.danmaku.databinding.ActivityMainBinding
-import com.douyin.danmaku.network.WebViewDanmakuFetcher
+import com.douyin.danmaku.network.DanmakuClient
 import com.douyin.danmaku.ui.DanmakuAdapter
 
 class MainActivity : AppCompatActivity() {
     
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: DanmakuAdapter
-    private var danmakuFetcher: WebViewDanmakuFetcher? = null
+    private var danmakuClient: DanmakuClient? = null
     
     private var isConnected = false
     
@@ -23,6 +23,7 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         
         initViews()
+        initClient()
     }
     
     private fun initViews() {
@@ -32,6 +33,37 @@ class MainActivity : AppCompatActivity() {
         
         binding.btnConnect.setOnClickListener { connect() }
         binding.btnDisconnect.setOnClickListener { disconnect() }
+    }
+    
+    private fun initClient() {
+        danmakuClient = DanmakuClient().apply {
+            setOnDanmakuCallback { message ->
+                runOnUiThread { adapter.addMessage(message) }
+            }
+            
+            setOnConnectedCallback {
+                runOnUiThread {
+                    isConnected = true
+                    updateConnectionStatus(true, false)
+                    Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
+                }
+            }
+            
+            setOnDisconnectedCallback {
+                runOnUiThread {
+                    isConnected = false
+                    updateConnectionStatus(false, false)
+                }
+            }
+            
+            setOnErrorCallback { error ->
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
+                    isConnected = false
+                    updateConnectionStatus(false, false)
+                }
+            }
+        }
     }
     
     private fun connect() {
@@ -46,50 +78,13 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
-        // 初始化Fetcher
-        if (danmakuFetcher == null) {
-            danmakuFetcher = WebViewDanmakuFetcher(this, binding.webViewContainer)
-            val success = danmakuFetcher!!.init()
-            if (!success) {
-                Toast.makeText(this, "WebView初始化失败，请检查设备是否支持WebView", Toast.LENGTH_LONG).show()
-                return
-            }
-            
-            danmakuFetcher!!.setOnDanmakuCallback { message ->
-                runOnUiThread { adapter.addMessage(message) }
-            }
-            
-            danmakuFetcher!!.setOnConnectedCallback {
-                runOnUiThread {
-                    isConnected = true
-                    updateConnectionStatus(true, false)
-                    Toast.makeText(this@MainActivity, "连接成功，等待弹幕...", Toast.LENGTH_SHORT).show()
-                }
-            }
-            
-            danmakuFetcher!!.setOnDisconnectedCallback {
-                runOnUiThread {
-                    isConnected = false
-                    updateConnectionStatus(false, false)
-                }
-            }
-            
-            danmakuFetcher!!.setOnErrorCallback { error ->
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
-                    isConnected = false
-                    updateConnectionStatus(false, false)
-                }
-            }
-        }
-        
         updateConnectionStatus(false, true)
         binding.roomInfoArea.visibility = View.VISIBLE
         binding.tvRoomTitle.text = "正在连接..."
         binding.tvViewerCount.text = "房间号: $input"
         
         val roomId = parseRoomId(input)
-        danmakuFetcher?.connect(roomId)
+        danmakuClient?.connect(roomId)
     }
     
     private fun parseRoomId(input: String): String {
@@ -111,7 +106,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun disconnect() {
-        danmakuFetcher?.disconnect()
+        danmakuClient?.disconnect()
         isConnected = false
         updateConnectionStatus(false, false)
         adapter.clear()
@@ -132,7 +127,6 @@ class MainActivity : AppCompatActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
-        danmakuFetcher?.destroy()
-        danmakuFetcher = null
+        danmakuClient?.destroy()
     }
 }
