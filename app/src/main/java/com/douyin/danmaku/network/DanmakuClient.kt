@@ -1,9 +1,11 @@
 package com.douyin.danmaku.network
 
+import android.content.Context
 import android.util.Log
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.model.DanmakuType
 import com.douyin.danmaku.proto.*
+import com.douyin.danmaku.utils.SignatureGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.*
@@ -12,7 +14,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.zip.GZIPInputStream
 
-class DanmakuClient {
+class DanmakuClient(private val context: Context) {
     
     companion object {
         private const val TAG = "DanmakuClient"
@@ -36,6 +38,7 @@ class DanmakuClient {
     
     private var ttwid: String? = null
     private var roomId: String? = null
+    private var signatureGenerator: SignatureGenerator? = null
     
     suspend fun connect(webRoomId: String) {
         withContext(Dispatchers.IO) {
@@ -43,6 +46,19 @@ class DanmakuClient {
                 disconnect()
                 
                 Log.d(TAG, "开始连接直播间: $webRoomId")
+                
+                // 0. 初始化签名生成器
+                if (signatureGenerator == null) {
+                    signatureGenerator = SignatureGenerator(context)
+                    val initSuccess = signatureGenerator!!.init()
+                    Log.d(TAG, "签名生成器初始化: $initSuccess")
+                    if (!initSuccess) {
+                        withContext(Dispatchers.Main) {
+                            onErrorCallback?.invoke("签名生成器初始化失败")
+                        }
+                        return@withContext
+                    }
+                }
                 
                 // 1. 获取ttwid
                 ttwid = fetchTtwid(webRoomId)
@@ -134,10 +150,10 @@ class DanmakuClient {
         return "$timestamp$random"
     }
     
-    private fun connectWebSocket() {
+    private suspend fun connectWebSocket() {
         val userUniqueId = generateUserUniqueId()
         
-        val wsUrl = buildString {
+        val wsUrlBase = buildString {
             append("wss://webcast100-ws-web-lq.douyin.com/webcast/im/push/v2/?")
             append("app_name=douyin_web&version_code=180800&webcast_sdk_version=1.0.14-beta.0")
             append("&update_version_code=1.0.14-beta.0&compress=gzip&device_platform=web")
@@ -148,6 +164,19 @@ class DanmakuClient {
             append("&host=https://live.douyin.com&aid=6383&live_id=1&did_rule=3&endpoint=live_pc&support_wrds=1")
             append("&user_unique_id=$userUniqueId&im_path=/webcast/im/fetch/&identity=audience")
             append("&need_persist_msg_count=15&room_id=${roomId}&heartbeatDuration=0")
+        }
+        
+        // 生成签名
+        var wsUrl = wsUrlBase
+        try {
+            val signature = signatureGenerator?.generateSignature(wsUrlBase)
+            Log.d(TAG, "生成签名: $signature")
+            if (!signature.isNullOrEmpty()) {
+                wsUrl = "$wsUrlBase&signature=$signature"
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "生成签名失败", e)
+            // 继续尝试不带签名连接
         }
         
         Log.d(TAG, "WebSocket URL: $wsUrl")
@@ -336,6 +365,8 @@ class DanmakuClient {
         webSocket?.close(1000, "User disconnect")
         webSocket = null
         isConnected.set(false)
+        signatureGenerator?.destroy()
+        signatureGenerator = null
     }
     
     fun setOnDanmakuCallback(callback: (DanmakuMessage) -> Unit) {

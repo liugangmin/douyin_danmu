@@ -38,7 +38,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun initClient() {
-        danmakuClient = DanmakuClient().apply {
+        danmakuClient = DanmakuClient(this).apply {
             setOnDanmakuCallback { message ->
                 runOnUiThread { adapter.addMessage(message) }
             }
