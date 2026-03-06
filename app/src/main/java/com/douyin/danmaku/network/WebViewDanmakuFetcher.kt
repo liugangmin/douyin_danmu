@@ -1,12 +1,11 @@
 package com.douyin.danmaku.network
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.os.Build
+import android.net.http.SslError
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.webkit.*
-import android.net.http.SslError
 import android.widget.FrameLayout
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.model.DanmakuType
@@ -24,71 +23,86 @@ class WebViewDanmakuFetcher(
     private var onDisconnectedCallback: (() -> Unit)? = null
     private var onErrorCallback: ((String) -> Unit)? = null
     
+    private var isInitialized = false
+    
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     fun init() {
+        if (isInitialized) return
+        
         mainHandler.post {
-            // 启用Cookie
-            CookieManager.getInstance().apply {
-                setAcceptCookie(true)
-                setAcceptThirdPartyCookies(null, true)
-            }
-            
-            webView = WebView(activity).apply {
-                layoutParams = FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.MATCH_PARENT
-                )
-                
-                settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    databaseEnabled = true
-                    mediaPlaybackRequiresUserGesture = false
-                    userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                    cacheMode = WebSettings.LOAD_DEFAULT
-                    blockNetworkImage = true
-                    loadsImagesAutomatically = false
-                    javaScriptCanOpenWindowsAutomatically = true
-                    allowFileAccess = true
-                    allowContentAccess = true
-                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            try {
+                // 启用Cookie
+                CookieManager.getInstance().apply {
+                    setAcceptCookie(true)
+                    setAcceptThirdPartyCookies(null, true)
                 }
                 
-                addJavascriptInterface(JsBridge(), "AndroidBridge")
-                
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView?, url: String?) {
-                        super.onPageFinished(view, url)
-                        if (url != null && url.contains("douyin.com")) {
-                            injectScript()
-                            onConnectedCallback?.invoke()
+                webView = WebView(activity.applicationContext).apply {
+                    layoutParams = FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.MATCH_PARENT,
+                        FrameLayout.LayoutParams.MATCH_PARENT
+                    )
+                    
+                    settings.apply {
+                        javaScriptEnabled = true
+                        domStorageEnabled = true
+                        databaseEnabled = true
+                        mediaPlaybackRequiresUserGesture = false
+                        userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                        blockNetworkImage = true
+                        loadsImagesAutomatically = false
+                        javaScriptCanOpenWindowsAutomatically = true
+                        allowFileAccess = true
+                        allowContentAccess = true
+                        mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                    }
+                    
+                    addJavascriptInterface(JsBridge(), "AndroidBridge")
+                    
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            if (url != null && url.contains("douyin.com")) {
+                                injectScript()
+                                onConnectedCallback?.invoke()
+                            }
+                        }
+                        
+                        override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                            handler?.proceed()
+                        }
+                        
+                        override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                            return false
                         }
                     }
                     
-                    override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
-                        handler?.proceed()
-                    }
-                    
-                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
-                        return false
+                    webChromeClient = object : WebChromeClient() {
+                        override fun onConsoleMessage(message: ConsoleMessage?): Boolean {
+                            return true
+                        }
                     }
                 }
                 
-                webChromeClient = object : WebChromeClient() {
-                    override fun onConsoleMessage(message: ConsoleMessage?): Boolean {
-                        return true
-                    }
-                }
+                container.addView(webView)
+                isInitialized = true
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onErrorCallback?.invoke("初始化失败: ${e.message}")
             }
-            
-            container.addView(webView)
         }
     }
     
     fun connect(roomId: String) {
         mainHandler.post {
-            val url = "https://live.douyin.com/$roomId"
-            webView?.loadUrl(url)
+            try {
+                val url = "https://live.douyin.com/$roomId"
+                webView?.loadUrl(url)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onErrorCallback?.invoke("连接失败: ${e.message}")
+            }
         }
     }
     
@@ -180,11 +194,16 @@ class WebViewDanmakuFetcher(
     
     fun destroy() {
         mainHandler.post {
-            webView?.stopLoading()
-            webView?.loadUrl("about:blank")
-            container.removeView(webView)
-            webView?.destroy()
-            webView = null
+            try {
+                webView?.stopLoading()
+                webView?.loadUrl("about:blank")
+                container.removeView(webView)
+                webView?.destroy()
+                webView = null
+                isInitialized = false
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
     

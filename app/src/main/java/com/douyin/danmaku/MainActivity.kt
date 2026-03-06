@@ -2,7 +2,6 @@ package com.douyin.danmaku
 
 import android.os.Bundle
 import android.view.View
-import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -14,7 +13,7 @@ class MainActivity : AppCompatActivity() {
     
     private lateinit var binding: ActivityMainBinding
     private lateinit var adapter: DanmakuAdapter
-    private lateinit var danmakuFetcher: WebViewDanmakuFetcher
+    private var danmakuFetcher: WebViewDanmakuFetcher? = null
     
     private var isConnected = false
     
@@ -24,7 +23,6 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
         
         initViews()
-        initDanmakuFetcher()
     }
     
     private fun initViews() {
@@ -37,8 +35,9 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun initDanmakuFetcher() {
-        val container = binding.webViewContainer
-        danmakuFetcher = WebViewDanmakuFetcher(this, container).apply {
+        if (danmakuFetcher != null) return
+        
+        danmakuFetcher = WebViewDanmakuFetcher(this, binding.webViewContainer).apply {
             init()
             
             setOnDanmakuCallback { message ->
@@ -84,13 +83,16 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
+        // 初始化Fetcher
+        initDanmakuFetcher()
+        
         updateConnectionStatus(false, true)
         binding.roomInfoArea.visibility = View.VISIBLE
         binding.tvRoomTitle.text = "正在连接..."
         binding.tvViewerCount.text = "房间号: $input"
         
         val roomId = parseRoomId(input)
-        danmakuFetcher.connect(roomId)
+        danmakuFetcher?.connect(roomId)
     }
     
     private fun parseRoomId(input: String): String {
@@ -112,7 +114,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun disconnect() {
-        danmakuFetcher.disconnect()
+        danmakuFetcher?.disconnect()
         isConnected = false
         updateConnectionStatus(false, false)
         adapter.clear()
@@ -133,6 +135,7 @@ class MainActivity : AppCompatActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
-        danmakuFetcher.destroy()
+        danmakuFetcher?.destroy()
+        danmakuFetcher = null
     }
 }
