@@ -8,7 +8,10 @@ import com.douyin.danmaku.proto.*
 import com.douyin.danmaku.utils.SignatureGenerator
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.*
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.WebSocket
+import okhttp3.WebSocketListener
 import okio.ByteString.Companion.toByteString
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,10 +47,9 @@ class DanmakuClient(private val context: Context) {
         withContext(Dispatchers.IO) {
             try {
                 disconnect()
-                    
                 Log.d(TAG, "开始连接直播间: $webRoomId")
-                    
-                // 0. 初始化签名生成器
+                
+                // 初始化签名生成器
                 if (signatureGenerator == null) {
                     signatureGenerator = SignatureGenerator(context)
                     val initSuccess = signatureGenerator!!.init()
@@ -59,25 +61,25 @@ class DanmakuClient(private val context: Context) {
                         return@withContext
                     }
                 }
-                    
-                // 1. 获取ttwid
+                
+                // 获取ttwid
                 ttwid = fetchTtwid(webRoomId)
                 Log.d(TAG, "获取ttwid: $ttwid")
-                    
-                // 2. 获取真实roomId
+                
+                // 获取真实roomId
                 roomId = fetchRoomId(webRoomId, ttwid)
                 Log.d(TAG, "获取roomId: $roomId")
-                    
+                
                 if (roomId.isNullOrEmpty()) {
                     withContext(Dispatchers.Main) {
-                        onErrorCallback?.invoke("无法获取直播间信息，请检查房间号是否正确")
+                        onErrorCallback?.invoke("无法获取直播间信息")
                     }
                     return@withContext
                 }
-                    
-                // 3. 连接WebSocket
+                
+                // 连接WebSocket
                 connectWebSocket()
-                    
+                
             } catch (e: Exception) {
                 Log.e(TAG, "连接失败", e)
                 withContext(Dispatchers.Main) {
@@ -86,14 +88,13 @@ class DanmakuClient(private val context: Context) {
             }
         }
     }
-        
+    
     private fun fetchTtwid(webRoomId: String): String? {
         return try {
             val request = Request.Builder()
                 .url("https://live.douyin.com/$webRoomId")
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
                 .build()
-                
             val response = client.newCall(request).execute()
             response.headers("Set-Cookie").forEach { cookie ->
                 if (cookie.startsWith("ttwid=")) {
@@ -106,31 +107,24 @@ class DanmakuClient(private val context: Context) {
             null
         }
     }
-        
+    
     private fun fetchRoomId(webRoomId: String, ttwid: String?): String? {
         return try {
             val msToken = generateMsToken()
             val request = Request.Builder()
                 .url("https://live.douyin.com/$webRoomId")
-                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
-                .header("Cookie", "ttwid=${ttwid ?: ""}; msToken=$msToken; __ac_nonce=0123407cc00a9e438deb4")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Cookie", "ttwid=${ttwid ?: ""}; msToken=$msToken")
                 .build()
-                
             val response = client.newCall(request).execute()
             val html = response.body?.string() ?: return null
-                
-            // 提取roomId - 多种匹配模式
             val patterns = listOf(
                 Regex("""roomId\\":\\"(\d+)\\""""),
-                Regex(""""roomId":\s*"?(\d+)"?"""),
-                Regex("""ROOM_ID\s*=\s*['"]?(\d+)['"]?""")
+                Regex(""""roomId":\s*"?(\d+)"?""")
             )
-                
             for (pattern in patterns) {
                 val match = pattern.find(html)
-                if (match != null) {
-                    return match.groupValues[1]
-                }
+                if (match != null) return match.groupValues[1]
             }
             null
         } catch (e: Exception) {
@@ -138,21 +132,18 @@ class DanmakuClient(private val context: Context) {
             null
         }
     }
-        
+    
     private fun generateMsToken(): String {
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
         return (1..182).map { chars.random() }.joinToString("")
     }
-        
+    
     private fun generateUserUniqueId(): String {
-        val timestamp = System.currentTimeMillis()
-        val random = (100000000..999999999).random()
-        return "$timestamp$random"
+        return "${System.currentTimeMillis()}${(100000000..999999999).random()}"
     }
-        
+    
     private fun connectWebSocket() {
         val userUniqueId = generateUserUniqueId()
-            
         val wsUrlBase = buildString {
             append("wss://webcast100-ws-web-lq.douyin.com/webcast/im/push/v2/?")
             append("app_name=douyin_web&version_code=180800&webcast_sdk_version=1.0.14-beta.0")
@@ -161,60 +152,57 @@ class DanmakuClient(private val context: Context) {
             append("&browser_language=zh-CN&browser_platform=Win32&browser_name=Mozilla")
             append("&browser_version=5.0%20(Windows%20NT%2010.0;%20Win64;%20x64)%20AppleWebKit/537.36")
             append("&browser_online=true&tz_name=Asia/Shanghai")
-            append("&host=https://live.douyin.com&aid=6383&live_id=1&did_rule=3&endpoint=live_pc&support_wrds=1")
+            append("&host=https://live.douyin.com&aid=6383&live_id=1&did_rule=3&endpoint=live_pc")
             append("&user_unique_id=$userUniqueId&im_path=/webcast/im/fetch/&identity=audience")
             append("&need_persist_msg_count=15&room_id=${roomId}&heartbeatDuration=0")
         }
-            
-        // 生成签名
+        
         var wsUrl = wsUrlBase
         try {
             val signature = signatureGenerator?.generateSignature(wsUrlBase)
-            Log.d(TAG, "生成签名: $signature")
             if (!signature.isNullOrEmpty()) {
                 wsUrl = "$wsUrlBase&signature=$signature"
             }
         } catch (e: Exception) {
             Log.e(TAG, "生成签名失败", e)
-            // 继续尝试不带签名连接
         }
-            
+        
         Log.d(TAG, "WebSocket URL: $wsUrl")
-            
+        
         val request = Request.Builder()
             .url(wsUrl)
-            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
             .header("Cookie", "ttwid=${ttwid ?: ""}")
             .build()
-            
+        
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(webSocket: WebSocket, response: Response) {
+            override fun onOpen(ws: WebSocket, response: okhttp3.Response) {
                 Log.d(TAG, "WebSocket 连接成功")
                 isConnected.set(true)
                 startHeartbeat()
                 onConnectedCallback?.invoke()
             }
-                
-            override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
+            
+            override fun onMessage(ws: WebSocket, bytes: okio.ByteString) {
                 try {
                     parseMessage(bytes.toByteArray())
                 } catch (e: Exception) {
                     Log.e(TAG, "解析消息失败", e)
                 }
             }
-                
-            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-                webSocket.close(1000, null)
+            
+            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
+                ws.close(1000, null)
             }
-                
-            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-                Log.d(TAG, "WebSocket 关闭: $code - $reason")
+            
+            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+                Log.d(TAG, "WebSocket 关闭: $code")
                 isConnected.set(false)
                 stopHeartbeat()
                 onDisconnectedCallback?.invoke()
             }
-                
-            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
+            
+            override fun onFailure(ws: WebSocket, t: Throwable, response: okhttp3.Response?) {
                 Log.e(TAG, "WebSocket 失败", t)
                 isConnected.set(false)
                 stopHeartbeat()
@@ -253,27 +241,26 @@ class DanmakuClient(private val context: Context) {
         try {
             val pushFrame = PushFrame.parseFrom(data)
             val payload = pushFrame.payload.toByteArray()
-            
             if (payload.isEmpty()) return
             
-            // GZIP解压
             val decompressed = GZIPInputStream(payload.inputStream()).readBytes()
-            
-            val response = Response.parseFrom(decompressed)
+            val protoResponse = com.douyin.danmaku.proto.Response.parseFrom(decompressed)
             
             // 发送ACK
-            if (response.needAck && response.internalExt.isNotEmpty()) {
+            if (protoResponse.needAck && protoResponse.internalExt.isNotEmpty()) {
                 val ack = PushFrame.newBuilder()
                     .setLogId(pushFrame.logId)
                     .setPayloadType("ack")
-                    .setPayload(com.google.protobuf.ByteString.copyFromUtf8(response.internalExt))
+                    .setPayload(com.google.protobuf.ByteString.copyFromUtf8(protoResponse.internalExt))
                     .build()
                     .toByteArray()
                 webSocket?.send(ack.toByteString())
             }
             
-            // 解析消息
-            response.messagesList.forEach { msg ->
+            // 解析消息列表
+            val messages = protoResponse.messagesList
+            for (i in 0 until messages.size) {
+                val msg = messages.get(i)
                 val method = msg.method
                 Log.d(TAG, "收到消息类型: $method")
                 
@@ -284,6 +271,7 @@ class DanmakuClient(private val context: Context) {
                         method.contains("MemberMessage") -> parseMemberMessage(msg.payload.toByteArray())
                         method.contains("LikeMessage") -> parseLikeMessage(msg.payload.toByteArray())
                         method.contains("SocialMessage") -> parseSocialMessage(msg.payload.toByteArray())
+                        else -> {} // 忽略其他消息类型
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "解析 $method 失败", e)
@@ -296,8 +284,8 @@ class DanmakuClient(private val context: Context) {
     
     private fun parseChatMessage(data: ByteArray) {
         val msg = ChatMessage.parseFrom(data)
-        val user = msg.user
-        if (user != null && msg.content.isNotEmpty()) {
+        val user = msg.user ?: return
+        if (msg.content.isNotEmpty()) {
             onDanmakuCallback?.invoke(DanmakuMessage(
                 type = DanmakuType.CHAT,
                 nickname = user.nickName,
@@ -309,48 +297,42 @@ class DanmakuClient(private val context: Context) {
     
     private fun parseGiftMessage(data: ByteArray) {
         val msg = GiftMessage.parseFrom(data)
-        val user = msg.user
+        val user = msg.user ?: return
         val giftName = if (msg.hasGift()) msg.gift.name else "礼物"
-        if (user != null) {
-            onDanmakuCallback?.invoke(DanmakuMessage(
-                type = DanmakuType.GIFT,
-                nickname = user.nickName,
-                content = "送出了 $giftName x${msg.comboCount}",
-                userId = user.id.toString()
-            ))
-        }
+        onDanmakuCallback?.invoke(DanmakuMessage(
+            type = DanmakuType.GIFT,
+            nickname = user.nickName,
+            content = "送出了 $giftName x${msg.comboCount}",
+            userId = user.id.toString()
+        ))
     }
     
     private fun parseMemberMessage(data: ByteArray) {
         val msg = MemberMessage.parseFrom(data)
-        val user = msg.user
-        if (user != null) {
-            onDanmakuCallback?.invoke(DanmakuMessage(
-                type = DanmakuType.ENTER,
-                nickname = user.nickName,
-                content = "进入了直播间",
-                userId = user.id.toString()
-            ))
-        }
+        val user = msg.user ?: return
+        onDanmakuCallback?.invoke(DanmakuMessage(
+            type = DanmakuType.ENTER,
+            nickname = user.nickName,
+            content = "进入了直播间",
+            userId = user.id.toString()
+        ))
     }
     
     private fun parseLikeMessage(data: ByteArray) {
         val msg = LikeMessage.parseFrom(data)
-        val user = msg.user
-        if (user != null) {
-            onDanmakuCallback?.invoke(DanmakuMessage(
-                type = DanmakuType.LIKE,
-                nickname = user.nickName,
-                content = "点了${msg.count}个赞",
-                userId = user.id.toString()
-            ))
-        }
+        val user = msg.user ?: return
+        onDanmakuCallback?.invoke(DanmakuMessage(
+            type = DanmakuType.LIKE,
+            nickname = user.nickName,
+            content = "点了${msg.count}个赞",
+            userId = user.id.toString()
+        ))
     }
     
     private fun parseSocialMessage(data: ByteArray) {
         val msg = SocialMessage.parseFrom(data)
-        val user = msg.user
-        if (user != null && msg.action == 1L) {
+        val user = msg.user ?: return
+        if (msg.action == 1L) {
             onDanmakuCallback?.invoke(DanmakuMessage(
                 type = DanmakuType.FOLLOW,
                 nickname = user.nickName,
