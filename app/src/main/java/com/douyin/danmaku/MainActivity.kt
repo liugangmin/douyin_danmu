@@ -4,10 +4,12 @@ import android.os.Bundle
 import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.douyin.danmaku.databinding.ActivityMainBinding
 import com.douyin.danmaku.network.DanmakuClient
 import com.douyin.danmaku.ui.DanmakuAdapter
+import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     
@@ -84,7 +86,9 @@ class MainActivity : AppCompatActivity() {
         binding.tvViewerCount.text = "房间号: $input"
         
         val roomId = parseRoomId(input)
-        danmakuClient?.connect(roomId)
+        lifecycleScope.launch {
+            danmakuClient?.connect(roomId)
+        }
     }
     
     private fun parseRoomId(input: String): String {
@@ -127,6 +131,6 @@ class MainActivity : AppCompatActivity() {
     
     override fun onDestroy() {
         super.onDestroy()
-        danmakuClient?.destroy()
+        danmakuClient?.disconnect()
     }
 }
