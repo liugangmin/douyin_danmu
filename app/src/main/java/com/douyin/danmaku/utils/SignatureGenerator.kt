@@ -6,9 +6,7 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import kotlinx.coroutines.suspendCancellableCoroutine
 import java.security.MessageDigest
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
 class SignatureGenerator(private val context: Context) {
@@ -19,8 +17,6 @@ class SignatureGenerator(private val context: Context) {
     
     private var webView: WebView? = null
     private var isInitialized = false
-    private val initLatch = CountDownLatch(1)
-    private val signatureResult = AtomicReference<String?>(null)
     
     suspend fun init(): Boolean {
         return suspendCancellableCoroutine { continuation ->
@@ -38,14 +34,14 @@ class SignatureGenerator(private val context: Context) {
                                 override fun onPageFinished(view: WebView?, url: String?) {
                                     Log.d(TAG, "JS加载完成")
                                     isInitialized = true
-                                    initLatch.countDown()
-                                    continuation.resume(true) {}
+                                    if (continuation.isActive) {
+                                        continuation.resume(true)
+                                    }
                                 }
                                 
                                 override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
                                     Log.e(TAG, "WebView错误: $description")
-                                    initLatch.countDown()
-                                    if (!continuation.isCompleted) {
+                                    if (continuation.isActive) {
                                         continuation.resumeWithException(Exception("WebView初始化失败: $description"))
                                     }
                                 }
@@ -79,9 +75,9 @@ class SignatureGenerator(private val context: Context) {
                         
                         // 超时处理
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            if (!continuation.isCompleted) {
+                            if (continuation.isActive) {
                                 if (isInitialized) {
-                                    continuation.resume(true) {}
+                                    continuation.resume(true)
                                 } else {
                                     continuation.resumeWithException(Exception("初始化超时"))
                                 }
@@ -90,12 +86,16 @@ class SignatureGenerator(private val context: Context) {
                         
                     } catch (e: Exception) {
                         Log.e(TAG, "初始化失败", e)
-                        continuation.resumeWithException(e)
+                        if (continuation.isActive) {
+                            continuation.resumeWithException(e)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "初始化异常", e)
-                continuation.resumeWithException(e)
+                if (continuation.isActive) {
+                    continuation.resumeWithException(e)
+                }
             }
         }
     }
@@ -129,13 +129,15 @@ class SignatureGenerator(private val context: Context) {
                             webView?.evaluateJavascript("javascript:window.signatureResult") { sigResult ->
                                 Log.d(TAG, "签名结果: $sigResult")
                                 
+                                if (!continuation.isActive) return@evaluateJavascript
+                                
                                 // 去掉引号
-                                var signature = sigResult?.trim('"') ?: ""
+                                val signature = sigResult?.trim('"') ?: ""
                                 
                                 if (signature.startsWith("error:")) {
                                     continuation.resumeWithException(Exception(signature))
                                 } else if (signature.isNotEmpty() && signature != "null") {
-                                    continuation.resume(signature) {}
+                                    continuation.resume(signature)
                                 } else {
                                     continuation.resumeWithException(Exception("签名生成失败"))
                                 }
@@ -144,19 +146,23 @@ class SignatureGenerator(private val context: Context) {
                         
                         // 超时处理
                         android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            if (!continuation.isCompleted) {
+                            if (continuation.isActive) {
                                 continuation.resumeWithException(Exception("签名生成超时"))
                             }
                         }, 3000)
                         
                     } catch (e: Exception) {
                         Log.e(TAG, "执行JS失败", e)
-                        continuation.resumeWithException(e)
+                        if (continuation.isActive) {
+                            continuation.resumeWithException(e)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "生成签名失败", e)
-                continuation.resumeWithException(e)
+                if (continuation.isActive) {
+                    continuation.resumeWithException(e)
+                }
             }
         }
     }
@@ -188,7 +194,7 @@ class SignatureGenerator(private val context: Context) {
         
         // 构建参数字符串
         val tplParams = params.map { param ->
-            "$it=${paramMap[param] ?: ""}"
+            "$param=${paramMap[param] ?: ""}"
         }
         val param = tplParams.joinToString(",")
         
