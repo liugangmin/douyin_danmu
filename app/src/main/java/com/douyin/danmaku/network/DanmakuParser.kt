@@ -33,11 +33,11 @@ object DanmakuParser {
         val user = chatMessage.user ?: return null
         val content = chatMessage.content
         
-        if (content.isNullOrBlank()) return null
+        if (content.isBlank()) return null
         
         return DanmakuMessage(
             type = DanmakuType.CHAT,
-            nickname = user.nickname ?: "匿名用户",
+            nickname = user.nickname,
             content = content,
             userId = user.id.toString()
         )
@@ -49,7 +49,7 @@ object DanmakuParser {
         
         return DanmakuMessage(
             type = DanmakuType.GIFT,
-            nickname = user.nickname ?: "匿名用户",
+            nickname = user.nickname,
             content = "送出了礼物",
             userId = user.id.toString()
         )
@@ -61,7 +61,7 @@ object DanmakuParser {
         
         return DanmakuMessage(
             type = DanmakuType.ENTER,
-            nickname = user.nickname ?: "匿名用户",
+            nickname = user.nickname,
             content = "进入了直播间",
             userId = user.id.toString()
         )
@@ -74,7 +74,7 @@ object DanmakuParser {
         
         return DanmakuMessage(
             type = DanmakuType.LIKE,
-            nickname = user.nickname ?: "匿名用户",
+            nickname = user.nickname,
             content = "点了${count}个赞",
             userId = user.id.toString()
         )
@@ -98,7 +98,7 @@ object DanmakuParser {
         
         return DanmakuMessage(
             type = DanmakuType.FANS_CLUB,
-            nickname = user.nickname ?: "匿名用户",
+            nickname = user.nickname,
             content = "成为粉丝团成员",
             userId = user.id.toString()
         )
