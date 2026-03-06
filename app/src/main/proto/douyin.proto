@@ -10,10 +10,11 @@ message PushFrame {
   uint64 service = 3;
   uint64 method = 4;
   bytes payload = 8;
+  string payloadType = 9;
 }
 
 message Response {
-  repeated Message messagesList = 1;
+  repeated Message messages = 1;
   string cursor = 2;
   uint64 fetchInterval = 3;
   uint64 now = 4;

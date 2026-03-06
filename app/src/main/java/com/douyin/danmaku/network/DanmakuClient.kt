@@ -273,7 +273,7 @@ class DanmakuClient(private val context: Context) {
             }
             
             // 解析消息
-            response.messagesListList.forEach { msg ->
+            response.messagesList.forEach { msg ->
                 val method = msg.method
                 Log.d(TAG, "收到消息类型: $method")
                 
