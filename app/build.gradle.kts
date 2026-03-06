@@ -52,7 +52,7 @@ android {
     }
 }
 
-val liveChatClientVersion = "0.1.4"
+val liveChatClientVersion = "1.5.8"
 
 dependencies {
     implementation("androidx.core:core-ktx:1.12.0")
