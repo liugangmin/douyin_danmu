@@ -17,8 +17,6 @@ class RoomInfoFetcher {
         .readTimeout(10, TimeUnit.SECONDS)
         .build()
     
-    private val gson = Gson()
-    
     suspend fun fetchRoomInfo(input: String): RoomInfo? {
         return withContext(Dispatchers.IO) {
             try {
