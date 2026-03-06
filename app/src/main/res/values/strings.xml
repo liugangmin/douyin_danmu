@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">抖音弹幕助手</string>
+    <string name="input_hint">输入直播间链接或房间号</string>
+    <string name="connect">连接</string>
+    <string name="disconnect">断开</string>
+    <string name="connecting">正在连接...</string>
+    <string name="connected">已连接</string>
+    <string name="disconnected">已断开</string>
+    <string name="error_connect">连接失败</string>
+    <string name="no_danmaku">暂无弹幕</string>
+</resources>
