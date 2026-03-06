@@ -133,8 +133,17 @@
         android:layout_height="0dp"
         android:background="@color/white"
         android:padding="8dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/webViewContainer"
         app:layout_constraintTop_toBottomOf="@id/divider"
         tools:listitem="@layout/item_danmaku" />
+
+    <!-- 隐藏的WebView容器 -->
+    <FrameLayout
+        android:id="@+id/webViewContainer"
+        android:layout_width="1dp"
+        android:layout_height="1dp"
+        android:visibility="invisible"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

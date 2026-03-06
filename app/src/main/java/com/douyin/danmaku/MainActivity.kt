@@ -2,6 +2,7 @@ package com.douyin.danmaku
 
 import android.os.Bundle
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -36,7 +37,8 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun initDanmakuFetcher() {
-        danmakuFetcher = WebViewDanmakuFetcher(applicationContext).apply {
+        val container = binding.webViewContainer
+        danmakuFetcher = WebViewDanmakuFetcher(this, container).apply {
             init()
             
             setOnDanmakuCallback { message ->
@@ -49,7 +51,7 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     isConnected = true
                     updateConnectionStatus(true, false)
-                    Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@MainActivity, "连接成功，等待弹幕...", Toast.LENGTH_SHORT).show()
                 }
             }
             

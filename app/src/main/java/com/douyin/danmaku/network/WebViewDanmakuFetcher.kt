@@ -2,13 +2,18 @@ package com.douyin.danmaku.network
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.webkit.*
+import android.widget.FrameLayout
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.model.DanmakuType
 
-class WebViewDanmakuFetcher(private val context: Context) {
+class WebViewDanmakuFetcher(
+    private val activity: android.app.Activity,
+    private val container: FrameLayout
+) {
     
     private var webView: WebView? = null
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -21,16 +26,31 @@ class WebViewDanmakuFetcher(private val context: Context) {
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     fun init() {
         mainHandler.post {
-            webView = WebView(context).apply {
+            // 启用Cookie
+            CookieManager.getInstance().apply {
+                setAcceptCookie(true)
+                setAcceptThirdPartyCookies(null, true)
+            }
+            
+            webView = WebView(activity).apply {
+                layoutParams = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT
+                )
+                
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     databaseEnabled = true
                     mediaPlaybackRequiresUserGesture = false
-                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                     userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-                    cacheMode = WebSettings.LOAD_NO_CACHE
+                    cacheMode = WebSettings.LOAD_DEFAULT
                     blockNetworkImage = true
+                    loadsImagesAutomatically = false
+                    javaScriptCanOpenWindowsAutomatically = true
+                    allowFileAccess = true
+                    allowContentAccess = true
+                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 }
                 
                 addJavascriptInterface(JsBridge(), "AndroidBridge")
@@ -38,16 +58,29 @@ class WebViewDanmakuFetcher(private val context: Context) {
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView?, url: String?) {
                         super.onPageFinished(view, url)
-                        injectScript()
-                        onConnectedCallback?.invoke()
+                        if (url != null && url.contains("douyin.com")) {
+                            injectScript()
+                            onConnectedCallback?.invoke()
+                        }
                     }
                     
-                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                        super.onReceivedError(view, request, error)
-                        onErrorCallback?.invoke("页面加载错误")
+                    override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
+                        handler?.proceed()
+                    }
+                    
+                    override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                        return false
+                    }
+                }
+                
+                webChromeClient = object : WebChromeClient() {
+                    override fun onConsoleMessage(message: ConsoleMessage?): Boolean {
+                        return true
                     }
                 }
             }
+            
+            container.addView(webView)
         }
     }
     
@@ -100,7 +133,6 @@ class WebViewDanmakuFetcher(private val context: Context) {
                 window.WebSocket.CLOSED = OriginalWebSocket.CLOSED;
                 
                 function parseMessage(str) {
-                    // Chat
                     if (str.indexOf('ChatMessage') > -1) {
                         var nick = matchPattern(str, /nickname":"([^"]+)"/);
                         var content = matchPattern(str, /content":"([^"]+)"/);
@@ -108,21 +140,18 @@ class WebViewDanmakuFetcher(private val context: Context) {
                             AndroidBridge.onDanmaku('CHAT', nick, content);
                         }
                     }
-                    // Member
                     else if (str.indexOf('MemberMessage') > -1) {
                         var nick = matchPattern(str, /nickname":"([^"]+)"/);
                         if (nick && window.AndroidBridge) {
                             AndroidBridge.onDanmaku('ENTER', nick, '进入了直播间');
                         }
                     }
-                    // Gift
                     else if (str.indexOf('GiftMessage') > -1) {
                         var nick = matchPattern(str, /nickname":"([^"]+)"/);
                         if (nick && window.AndroidBridge) {
                             AndroidBridge.onDanmaku('GIFT', nick, '送出了礼物');
                         }
                     }
-                    // Like
                     else if (str.indexOf('LikeMessage') > -1) {
                         var nick = matchPattern(str, /nickname":"([^"]+)"/);
                         if (nick && window.AndroidBridge) {
@@ -150,6 +179,9 @@ class WebViewDanmakuFetcher(private val context: Context) {
     
     fun destroy() {
         mainHandler.post {
+            webView?.stopLoading()
+            webView?.loadUrl("about:blank")
+            container.removeView(webView)
             webView?.destroy()
             webView = null
         }
