@@ -1,170 +1,134 @@
 package com.douyin.danmaku.utils
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import kotlinx.coroutines.suspendCancellableCoroutine
 import java.security.MessageDigest
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicReference
 
 class SignatureGenerator(private val context: Context) {
     
     companion object {
         private const val TAG = "SignatureGenerator"
+        private const val TIMEOUT_SECONDS = 10L
     }
     
     private var webView: WebView? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private val initLatch = CountDownLatch(1)
     private var isInitialized = false
     
-    suspend fun init(): Boolean {
-        return suspendCancellableCoroutine { continuation ->
+    fun init(): Boolean {
+        Log.d(TAG, "开始初始化签名生成器")
+        
+        val initResult = AtomicReference<Boolean>(false)
+        
+        mainHandler.post {
             try {
-                Log.d(TAG, "开始初始化签名生成器")
-                
-                // 在主线程创建WebView
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    try {
-                        webView = WebView(context).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            
-                            webViewClient = object : WebViewClient() {
-                                override fun onPageFinished(view: WebView?, url: String?) {
-                                    Log.d(TAG, "JS加载完成")
-                                    isInitialized = true
-                                    if (continuation.isActive) {
-                                        continuation.resume(true)
-                                    }
-                                }
-                                
-                                override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
-                                    Log.e(TAG, "WebView错误: $description")
-                                    if (continuation.isActive) {
-                                        continuation.resumeWithException(Exception("WebView初始化失败: $description"))
-                                    }
-                                }
-                            }
+                webView = WebView(context).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    
+                    webViewClient = object : WebViewClient() {
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            Log.d(TAG, "JS加载完成")
+                            isInitialized = true
+                            initResult.set(true)
+                            initLatch.countDown()
                         }
                         
-                        // 加载sign.js
-                        val jsContent = context.assets.open("sign.js").bufferedReader().use { it.readText() }
-                        Log.d(TAG, "sign.js内容长度: ${jsContent.length}")
-                        
-                        // 注入必要的全局变量
-                        val html = """
-                            <!DOCTYPE html>
-                            <html>
-                            <head><meta charset="utf-8"></head>
-                            <body>
-                            <script>
-                            $jsContent
-                            </script>
-                            </body>
-                            </html>
-                        """.trimIndent()
-                        
-                        webView?.loadDataWithBaseURL(
-                            "https://www.douyin.com",
-                            html,
-                            "text/html",
-                            "UTF-8",
-                            null
-                        )
-                        
-                        // 超时处理
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            if (continuation.isActive) {
-                                if (isInitialized) {
-                                    continuation.resume(true)
-                                } else {
-                                    continuation.resumeWithException(Exception("初始化超时"))
-                                }
-                            }
-                        }, 5000)
-                        
-                    } catch (e: Exception) {
-                        Log.e(TAG, "初始化失败", e)
-                        if (continuation.isActive) {
-                            continuation.resumeWithException(e)
+                        override fun onReceivedError(view: WebView?, errorCode: Int, description: String?, failingUrl: String?) {
+                            Log.e(TAG, "WebView错误: $description")
+                            initLatch.countDown()
                         }
                     }
                 }
+                
+                // 加载sign.js
+                val jsContent = context.assets.open("sign.js").bufferedReader().use { it.readText() }
+                Log.d(TAG, "sign.js内容长度: ${jsContent.length}")
+                
+                val html = """
+                    <!DOCTYPE html>
+                    <html>
+                    <head><meta charset="utf-8"></head>
+                    <body>
+                    <script>
+                    $jsContent
+                    </script>
+                    </body>
+                    </html>
+                """.trimIndent()
+                
+                webView?.loadDataWithBaseURL(
+                    "https://www.douyin.com",
+                    html,
+                    "text/html",
+                    "UTF-8",
+                    null
+                )
+                
             } catch (e: Exception) {
-                Log.e(TAG, "初始化异常", e)
-                if (continuation.isActive) {
-                    continuation.resumeWithException(e)
-                }
+                Log.e(TAG, "初始化失败", e)
+                initLatch.countDown()
             }
         }
+        
+        // 等待初始化完成
+        val success = initLatch.await(TIMEOUT_SECONDS, TimeUnit.SECONDS) && initResult.get()
+        Log.d(TAG, "初始化结果: $success")
+        return success
     }
     
     /**
      * 生成签名
-     * @param wss WebSocket URL
-     * @return 签名字符串
      */
-    suspend fun generateSignature(wss: String): String {
-        return suspendCancellableCoroutine { continuation ->
-            if (!isInitialized) {
-                continuation.resumeWithException(Exception("签名生成器未初始化"))
-                return@suspendCancellableCoroutine
-            }
-            
+    fun generateSignature(wss: String): String? {
+        if (!isInitialized) {
+            Log.e(TAG, "签名生成器未初始化")
+            return null
+        }
+        
+        val md5Param = calculateMd5Param(wss)
+        Log.d(TAG, "MD5参数: $md5Param")
+        
+        val resultLatch = CountDownLatch(1)
+        val signatureResult = AtomicReference<String?>(null)
+        
+        mainHandler.post {
             try {
-                // 计算参数MD5
-                val md5Param = calculateMd5Param(wss)
-                Log.d(TAG, "MD5参数: $md5Param")
+                val jsCode = "javascript:try { window.signatureResult = get_sign('$md5Param'); } catch(e) { window.signatureResult = 'error:' + e.message; }"
                 
-                // 在主线程执行JS
-                android.os.Handler(android.os.Looper.getMainLooper()).post {
-                    try {
-                        val jsCode = "javascript:try { window.signatureResult = get_sign('$md5Param'); } catch(e) { window.signatureResult = 'error:' + e.message; }"
+                webView?.evaluateJavascript(jsCode) {
+                    webView?.evaluateJavascript("javascript:window.signatureResult") { sigResult ->
+                        Log.d(TAG, "签名结果: $sigResult")
                         
-                        webView?.evaluateJavascript(jsCode) { result ->
-                            Log.d(TAG, "JS执行结果: $result")
-                            
-                            // 获取签名结果
-                            webView?.evaluateJavascript("javascript:window.signatureResult") { sigResult ->
-                                Log.d(TAG, "签名结果: $sigResult")
-                                
-                                if (!continuation.isActive) return@evaluateJavascript
-                                
-                                // 去掉引号
-                                val signature = sigResult?.trim('"') ?: ""
-                                
-                                if (signature.startsWith("error:")) {
-                                    continuation.resumeWithException(Exception(signature))
-                                } else if (signature.isNotEmpty() && signature != "null") {
-                                    continuation.resume(signature)
-                                } else {
-                                    continuation.resumeWithException(Exception("签名生成失败"))
-                                }
-                            }
+                        val signature = sigResult?.trim('"') ?: ""
+                        if (!signature.startsWith("error:") && signature != "null" && signature.isNotEmpty()) {
+                            signatureResult.set(signature)
                         }
-                        
-                        // 超时处理
-                        android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
-                            if (continuation.isActive) {
-                                continuation.resumeWithException(Exception("签名生成超时"))
-                            }
-                        }, 3000)
-                        
-                    } catch (e: Exception) {
-                        Log.e(TAG, "执行JS失败", e)
-                        if (continuation.isActive) {
-                            continuation.resumeWithException(e)
-                        }
+                        resultLatch.countDown()
                     }
                 }
+                
+                // 超时处理
+                mainHandler.postDelayed({
+                    resultLatch.countDown()
+                }, 5000)
+                
             } catch (e: Exception) {
-                Log.e(TAG, "生成签名失败", e)
-                if (continuation.isActive) {
-                    continuation.resumeWithException(e)
-                }
+                Log.e(TAG, "执行JS失败", e)
+                resultLatch.countDown()
             }
         }
+        
+        resultLatch.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        return signatureResult.get()
     }
     
     /**
@@ -178,7 +142,6 @@ class SignatureGenerator(private val context: Context) {
             "identity"
         )
         
-        // 解析URL参数
         val queryStart = wss.indexOf("?")
         if (queryStart < 0) return ""
         
@@ -192,20 +155,18 @@ class SignatureGenerator(private val context: Context) {
             }
         }
         
-        // 构建参数字符串
         val tplParams = params.map { param ->
             "$param=${paramMap[param] ?: ""}"
         }
         val param = tplParams.joinToString(",")
         
-        // 计算MD5
         val md5 = MessageDigest.getInstance("MD5")
         val digest = md5.digest(param.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
     }
     
     fun destroy() {
-        android.os.Handler(android.os.Looper.getMainLooper()).post {
+        mainHandler.post {
             webView?.destroy()
             webView = null
             isInitialized = false

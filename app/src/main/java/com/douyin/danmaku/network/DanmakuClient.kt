@@ -44,9 +44,9 @@ class DanmakuClient(private val context: Context) {
         withContext(Dispatchers.IO) {
             try {
                 disconnect()
-                
+                    
                 Log.d(TAG, "开始连接直播间: $webRoomId")
-                
+                    
                 // 0. 初始化签名生成器
                 if (signatureGenerator == null) {
                     signatureGenerator = SignatureGenerator(context)
@@ -59,25 +59,25 @@ class DanmakuClient(private val context: Context) {
                         return@withContext
                     }
                 }
-                
+                    
                 // 1. 获取ttwid
                 ttwid = fetchTtwid(webRoomId)
                 Log.d(TAG, "获取ttwid: $ttwid")
-                
+                    
                 // 2. 获取真实roomId
                 roomId = fetchRoomId(webRoomId, ttwid)
                 Log.d(TAG, "获取roomId: $roomId")
-                
+                    
                 if (roomId.isNullOrEmpty()) {
                     withContext(Dispatchers.Main) {
                         onErrorCallback?.invoke("无法获取直播间信息，请检查房间号是否正确")
                     }
                     return@withContext
                 }
-                
+                    
                 // 3. 连接WebSocket
                 connectWebSocket()
-                
+                    
             } catch (e: Exception) {
                 Log.e(TAG, "连接失败", e)
                 withContext(Dispatchers.Main) {
@@ -86,14 +86,14 @@ class DanmakuClient(private val context: Context) {
             }
         }
     }
-    
+        
     private fun fetchTtwid(webRoomId: String): String? {
         return try {
             val request = Request.Builder()
                 .url("https://live.douyin.com/$webRoomId")
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
                 .build()
-            
+                
             val response = client.newCall(request).execute()
             response.headers("Set-Cookie").forEach { cookie ->
                 if (cookie.startsWith("ttwid=")) {
@@ -106,7 +106,7 @@ class DanmakuClient(private val context: Context) {
             null
         }
     }
-    
+        
     private fun fetchRoomId(webRoomId: String, ttwid: String?): String? {
         return try {
             val msToken = generateMsToken()
@@ -115,17 +115,17 @@ class DanmakuClient(private val context: Context) {
                 .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
                 .header("Cookie", "ttwid=${ttwid ?: ""}; msToken=$msToken; __ac_nonce=0123407cc00a9e438deb4")
                 .build()
-            
+                
             val response = client.newCall(request).execute()
             val html = response.body?.string() ?: return null
-            
+                
             // 提取roomId - 多种匹配模式
             val patterns = listOf(
-                Regex("""roomId\\":\\"(\d+)\\"""),
+                Regex("""roomId\\":\\"(\d+)\\""""),
                 Regex(""""roomId":\s*"?(\d+)"?"""),
                 Regex("""ROOM_ID\s*=\s*['"]?(\d+)['"]?""")
             )
-            
+                
             for (pattern in patterns) {
                 val match = pattern.find(html)
                 if (match != null) {
@@ -138,21 +138,21 @@ class DanmakuClient(private val context: Context) {
             null
         }
     }
-    
+        
     private fun generateMsToken(): String {
         val chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
         return (1..182).map { chars.random() }.joinToString("")
     }
-    
+        
     private fun generateUserUniqueId(): String {
         val timestamp = System.currentTimeMillis()
         val random = (100000000..999999999).random()
         return "$timestamp$random"
     }
-    
-    private suspend fun connectWebSocket() {
-        val userUniqueId = generateUserUniqueId()
         
+    private fun connectWebSocket() {
+        val userUniqueId = generateUserUniqueId()
+            
         val wsUrlBase = buildString {
             append("wss://webcast100-ws-web-lq.douyin.com/webcast/im/push/v2/?")
             append("app_name=douyin_web&version_code=180800&webcast_sdk_version=1.0.14-beta.0")
@@ -165,7 +165,7 @@ class DanmakuClient(private val context: Context) {
             append("&user_unique_id=$userUniqueId&im_path=/webcast/im/fetch/&identity=audience")
             append("&need_persist_msg_count=15&room_id=${roomId}&heartbeatDuration=0")
         }
-        
+            
         // 生成签名
         var wsUrl = wsUrlBase
         try {
@@ -178,15 +178,15 @@ class DanmakuClient(private val context: Context) {
             Log.e(TAG, "生成签名失败", e)
             // 继续尝试不带签名连接
         }
-        
+            
         Log.d(TAG, "WebSocket URL: $wsUrl")
-        
+            
         val request = Request.Builder()
             .url(wsUrl)
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36")
             .header("Cookie", "ttwid=${ttwid ?: ""}")
             .build()
-        
+            
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
                 Log.d(TAG, "WebSocket 连接成功")
@@ -194,7 +194,7 @@ class DanmakuClient(private val context: Context) {
                 startHeartbeat()
                 onConnectedCallback?.invoke()
             }
-            
+                
             override fun onMessage(webSocket: WebSocket, bytes: okio.ByteString) {
                 try {
                     parseMessage(bytes.toByteArray())
@@ -202,18 +202,18 @@ class DanmakuClient(private val context: Context) {
                     Log.e(TAG, "解析消息失败", e)
                 }
             }
-            
+                
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 webSocket.close(1000, null)
             }
-            
+                
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket 关闭: $code - $reason")
                 isConnected.set(false)
                 stopHeartbeat()
                 onDisconnectedCallback?.invoke()
             }
-            
+                
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket 失败", t)
                 isConnected.set(false)
