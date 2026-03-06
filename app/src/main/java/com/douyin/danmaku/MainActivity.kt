@@ -34,43 +34,6 @@ class MainActivity : AppCompatActivity() {
         binding.btnDisconnect.setOnClickListener { disconnect() }
     }
     
-    private fun initDanmakuFetcher() {
-        if (danmakuFetcher != null) return
-        
-        danmakuFetcher = WebViewDanmakuFetcher(this, binding.webViewContainer).apply {
-            init()
-            
-            setOnDanmakuCallback { message ->
-                runOnUiThread { 
-                    adapter.addMessage(message)
-                }
-            }
-            
-            setOnConnectedCallback {
-                runOnUiThread {
-                    isConnected = true
-                    updateConnectionStatus(true, false)
-                    Toast.makeText(this@MainActivity, "连接成功，等待弹幕...", Toast.LENGTH_SHORT).show()
-                }
-            }
-            
-            setOnDisconnectedCallback {
-                runOnUiThread {
-                    isConnected = false
-                    updateConnectionStatus(false, false)
-                }
-            }
-            
-            setOnErrorCallback { error ->
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
-                    isConnected = false
-                    updateConnectionStatus(false, false)
-                }
-            }
-        }
-    }
-    
     private fun connect() {
         val input = binding.etRoomId.text.toString().trim()
         if (input.isEmpty()) {
@@ -84,7 +47,41 @@ class MainActivity : AppCompatActivity() {
         }
         
         // 初始化Fetcher
-        initDanmakuFetcher()
+        if (danmakuFetcher == null) {
+            danmakuFetcher = WebViewDanmakuFetcher(this, binding.webViewContainer)
+            val success = danmakuFetcher!!.init()
+            if (!success) {
+                Toast.makeText(this, "WebView初始化失败，请检查设备是否支持WebView", Toast.LENGTH_LONG).show()
+                return
+            }
+            
+            danmakuFetcher!!.setOnDanmakuCallback { message ->
+                runOnUiThread { adapter.addMessage(message) }
+            }
+            
+            danmakuFetcher!!.setOnConnectedCallback {
+                runOnUiThread {
+                    isConnected = true
+                    updateConnectionStatus(true, false)
+                    Toast.makeText(this@MainActivity, "连接成功，等待弹幕...", Toast.LENGTH_SHORT).show()
+                }
+            }
+            
+            danmakuFetcher!!.setOnDisconnectedCallback {
+                runOnUiThread {
+                    isConnected = false
+                    updateConnectionStatus(false, false)
+                }
+            }
+            
+            danmakuFetcher!!.setOnErrorCallback { error ->
+                runOnUiThread {
+                    Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
+                    isConnected = false
+                    updateConnectionStatus(false, false)
+                }
+            }
+        }
         
         updateConnectionStatus(false, true)
         binding.roomInfoArea.visibility = View.VISIBLE
