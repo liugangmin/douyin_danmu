@@ -75,10 +75,14 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
                     binding.tvNickname.text = "${message.nickname}："
                     binding.tvNickname.setTextColor(0xFF2196F3.toInt())
                     
+                    val content = message.content
+                    
                     if (message.emojis.isNotEmpty()) {
-                        parseAndSetEmojiText(context, message.content, message.emojis, binding.tvContent.textSize)
+                        parseAndSetEmojiText(context, content, message.emojis, binding.tvContent.textSize)
+                    } else if (containsEmojiPattern(content)) {
+                        parseAndLoadEmojiFromPattern(context, content, binding.tvContent.textSize)
                     } else {
-                        binding.tvContent.text = message.content
+                        binding.tvContent.text = content
                     }
                     binding.tvContent.setTextColor(0xFFFFFFFF.toInt())
                 }
@@ -118,6 +122,39 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
             }
         }
         
+        private fun containsEmojiPattern(text: String): Boolean {
+            return text.contains("[") && text.contains("]")
+        }
+        
+        private fun parseAndLoadEmojiFromPattern(context: android.content.Context, text: String, textSize: Float) {
+            val spannable = SpannableString(text)
+            val emojiSize = (textSize * 1.3).toInt()
+            val pattern = Regex("\\[([^\\[\\]]+)\\]")
+            val matches = pattern.findAll(text).toList()
+            
+            if (matches.isEmpty()) {
+                binding.tvContent.text = text
+                return
+            }
+            
+            binding.tvContent.text = text
+            
+            CoroutineScope(Dispatchers.Main).launch {
+                for (match in matches) {
+                    val emojiCode = match.groupValues[1]
+                    val url = getEmojiUrl(emojiCode)
+                    
+                    val bitmap = loadEmojiBitmap(context, url)
+                    if (bitmap != null) {
+                        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, emojiSize, emojiSize, true)
+                        val span = ImageSpan(context, scaledBitmap, ImageSpan.ALIGN_BASELINE)
+                        spannable.setSpan(span, match.range.first, match.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                    }
+                }
+                binding.tvContent.text = spannable
+            }
+        }
+        
         private fun parseAndSetEmojiText(
             context: android.content.Context, 
             text: String, 
@@ -144,6 +181,10 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
                 }
                 binding.tvContent.text = spannable
             }
+        }
+        
+        private fun getEmojiUrl(code: String): String {
+            return "https://p3-webcast.douyinpic.com/img/webcast/emoji/$code.png"
         }
         
         private suspend fun loadEmojiBitmap(context: android.content.Context, url: String): Bitmap? {
