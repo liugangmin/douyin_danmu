@@ -13,10 +13,9 @@ import com.douyin.danmaku.model.DanmakuType
 class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() {
     
     private val items = mutableListOf<DanmakuMessage>()
-    private val maxSize = 500 // 最大显示数量
+    private val maxSize = 500
     
     fun addMessage(message: DanmakuMessage): Int {
-        // 新消息添加到末尾（最新消息在底部）
         items.add(message)
         if (items.size > maxSize) {
             items.removeAt(0)
@@ -54,15 +53,15 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
             binding.tvNickname.text = message.nickname
             binding.tvContent.text = message.content
             
-            // 根据消息类型设置不同颜色
+            // 根据消息类型设置不同颜色（适合黑色背景）
             val color = when (message.type) {
-                DanmakuType.CHAT -> 0xFF6200EE.toInt() // 紫色
-                DanmakuType.GIFT -> 0xFFFF9800.toInt() // 橙色
-                DanmakuType.ENTER -> 0xFF03DAC5.toInt() // 青色
-                DanmakuType.LIKE -> 0xFFE91E63.toInt() // 粉色
+                DanmakuType.CHAT -> 0xFFFFFFFF.toInt() // 白色
+                DanmakuType.GIFT -> 0xFFFFD700.toInt() // 金色
+                DanmakuType.ENTER -> 0xFF00BCD4.toInt() // 青色
+                DanmakuType.LIKE -> 0xFFFF69B4.toInt() // 粉色
                 DanmakuType.FOLLOW -> 0xFF4CAF50.toInt() // 绿色
                 DanmakuType.FANS_CLUB -> 0xFFFFC107.toInt() // 黄色
-                DanmakuType.STATS -> 0xFF9C27B0.toInt() // 深紫色
+                DanmakuType.STATS -> 0xFF9C27B0.toInt() // 紫色
             }
             
             binding.tvNickname.setTextColor(color)

@@ -1,7 +1,6 @@
 package com.douyin.danmaku
 
 import android.os.Bundle
-import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -19,6 +18,7 @@ class MainActivity : AppCompatActivity() {
     private var danmakuClient: DanmakuClient? = null
     
     private var isConnected = false
+    private var isConnecting = false
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,13 +32,19 @@ class MainActivity : AppCompatActivity() {
     private fun initViews() {
         adapter = DanmakuAdapter()
         val layoutManager = LinearLayoutManager(this)
-        // 设置堆栈从底部开始，新消息会在底部
         layoutManager.stackFromEnd = true
         binding.rvDanmaku.layoutManager = layoutManager
         binding.rvDanmaku.adapter = adapter
         
-        binding.btnConnect.setOnClickListener { connect() }
-        binding.btnDisconnect.setOnClickListener { disconnect() }
+        binding.btnConnect.setOnClickListener {
+            if (isConnected) {
+                disconnect()
+            } else {
+                connect()
+            }
+        }
+        
+        updateUI()
     }
     
     private fun initClient() {
@@ -46,7 +52,6 @@ class MainActivity : AppCompatActivity() {
             setOnDanmakuCallback { message ->
                 runOnUiThread {
                     val position = adapter.addMessage(message)
-                    // 自动滚动到最新消息
                     binding.rvDanmaku.scrollToPosition(position)
                 }
             }
@@ -54,8 +59,8 @@ class MainActivity : AppCompatActivity() {
             setOnConnectedCallback {
                 runOnUiThread {
                     isConnected = true
-                    updateConnectionStatus(true, false)
-                    // 保持屏幕常亮
+                    isConnecting = false
+                    updateUI()
                     window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
                 }
@@ -64,8 +69,8 @@ class MainActivity : AppCompatActivity() {
             setOnDisconnectedCallback {
                 runOnUiThread {
                     isConnected = false
-                    updateConnectionStatus(false, false)
-                    // 取消屏幕常亮
+                    isConnecting = false
+                    updateUI()
                     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 }
             }
@@ -74,7 +79,8 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     Toast.makeText(this@MainActivity, "错误: $error", Toast.LENGTH_SHORT).show()
                     isConnected = false
-                    updateConnectionStatus(false, false)
+                    isConnecting = false
+                    updateUI()
                 }
             }
         }
@@ -87,20 +93,27 @@ class MainActivity : AppCompatActivity() {
             return
         }
         
-        if (isConnected) {
-            Toast.makeText(this, "已经连接中，请先断开", Toast.LENGTH_SHORT).show()
+        if (isConnected || isConnecting) {
             return
         }
         
-        updateConnectionStatus(false, true)
-        binding.roomInfoArea.visibility = View.VISIBLE
-        binding.tvRoomTitle.text = "正在连接..."
-        binding.tvViewerCount.text = "房间号: $input"
+        isConnecting = true
+        updateUI()
         
         val roomId = parseRoomId(input)
         lifecycleScope.launch {
             danmakuClient?.connect(roomId)
         }
+    }
+    
+    private fun disconnect() {
+        danmakuClient?.disconnect()
+        isConnected = false
+        isConnecting = false
+        adapter.clear()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        updateUI()
+        Toast.makeText(this, "已断开连接", Toast.LENGTH_SHORT).show()
     }
     
     private fun parseRoomId(input: String): String {
@@ -121,26 +134,23 @@ class MainActivity : AppCompatActivity() {
         return input
     }
     
-    private fun disconnect() {
-        danmakuClient?.disconnect()
-        isConnected = false
-        updateConnectionStatus(false, false)
-        adapter.clear()
-        binding.roomInfoArea.visibility = View.GONE
-        // 取消屏幕常亮
-        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        Toast.makeText(this, "已断开连接", Toast.LENGTH_SHORT).show()
-    }
-    
-    private fun updateConnectionStatus(connected: Boolean, connecting: Boolean) {
-        binding.btnConnect.isEnabled = !connected && !connecting
-        binding.btnDisconnect.isEnabled = connected || connecting
+    private fun updateUI() {
+        // 更新按钮文字
+        binding.btnConnect.text = if (isConnected) {
+            getString(R.string.disconnect)
+        } else {
+            getString(R.string.connect)
+        }
         
+        // 更新状态文字
         binding.tvStatus.text = when {
-            connecting -> getString(R.string.connecting)
-            connected -> getString(R.string.connected)
+            isConnecting -> getString(R.string.connecting)
+            isConnected -> getString(R.string.connected)
             else -> getString(R.string.disconnected)
         }
+        
+        // 输入框在连接时禁用
+        binding.etRoomId.isEnabled = !isConnected && !isConnecting
     }
     
     override fun onDestroy() {
