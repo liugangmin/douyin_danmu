@@ -153,128 +153,82 @@ class DanmakuClient(private val context: Context) {
             var anchorName = ""
             var viewerCount: Long = 0
             
-            val ownerStrPatterns = listOf(
-                Regex(""""owner":\s*\{[^}]*"nickname":\s*"([^"]+)"[^}]*\}"""),
-                Regex("""owner\\":\{[^}]*nickname\\":\\"([^"\\]+)[^}]*\}""")
+            Log.d(TAG, "HTML长度: ${html.length}")
+            
+            val nicknamePatterns = listOf(
+                Regex(""""nickname"\s*:\s*"([^"]{1,30})""""),
+                Regex("""nickname\\":\\"([^"\\]{1,30})\\"""")
             )
-            for (pattern in ownerStrPatterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    anchorName = match.groupValues[1]
-                    break
-                }
-            }
-            
-            if (anchorName.isEmpty()) {
-                val streamerMatch = Regex(""""streamer":\s*\{[^}]*"nickname":\s*"([^"]+)"[^}]*\}""").find(html)
-                if (streamerMatch != null) {
-                    anchorName = streamerMatch.groupValues[1]
-                }
-            }
-            
-            val renderDataMatch = Regex("""RENDER_DATA\s*=\s*({[^;]+})""").find(html)
-            if (renderDataMatch != null) {
-                try {
-                    val jsonStr = renderDataMatch.groupValues[1]
-                    Log.d(TAG, "找到RENDER_DATA，长度: ${jsonStr.length}")
-                } catch (e: Exception) {
-                    Log.e(TAG, "解析RENDER_DATA失败", e)
-                }
-            }
-            
-            val roomStrMatch = Regex(""""room"\s*:\s*\{""").find(html)
-            if (roomStrMatch != null) {
-                val startIndex = roomStrMatch.range.first
-                var braceCount = 0
-                var endIndex = startIndex
-                for (i in startIndex until html.length) {
-                    if (html[i] == '{') braceCount++
-                    else if (html[i] == '}') {
-                        braceCount--
-                        if (braceCount == 0) {
-                            endIndex = i + 1
+            for (pattern in nicknamePatterns) {
+                val matches = pattern.findAll(html).toList()
+                Log.d(TAG, "nickname匹配数量: ${matches.size}")
+                if (matches.isNotEmpty()) {
+                    for (match in matches) {
+                        val name = match.groupValues[1]
+                        if (name.isNotEmpty() && !name.contains("\$") && !name.contains("undefined")) {
+                            anchorName = name
+                            Log.d(TAG, "获取到主播名: $anchorName")
                             break
                         }
                     }
-                }
-                val roomJson = html.substring(startIndex, endIndex)
-                Log.d(TAG, "room JSON 长度: ${roomJson.length}")
-                
-                val titleMatch = Regex(""""title"\s*:\s*"([^"]+)"""").find(roomJson)
-                if (titleMatch != null) {
-                    title = titleMatch.groupValues[1]
-                    Log.d(TAG, "从room中获取标题: $title")
-                }
-                
-                val viewerStrPatterns = listOf(
-                    Regex(""""user_count_str"\s*:\s*"([^"]+)""""),
-                    Regex(""""total_user_count_str"\s*:\s*"([^"]+)""""),
-                    Regex(""""online_user_count_str"\s*:\s*"([^"]+)"""")
-                )
-                for (pattern in viewerStrPatterns) {
-                    val match = pattern.find(roomJson)
-                    if (match != null) {
-                        val countStr = match.groupValues[1]
-                        Log.d(TAG, "找到观众数字符串: $countStr")
-                        viewerCount = parseViewerCount(countStr)
-                        if (viewerCount > 0) break
-                    }
+                    if (anchorName.isNotEmpty()) break
                 }
             }
             
-            if (title.isEmpty()) {
-                val titlePatterns = listOf(
-                    Regex(""""live_room_title"\s*:\s*"([^"]+)""""),
-                    Regex("""live_room_title\\":\\"([^"\\]+)\\""")
-                )
-                for (pattern in titlePatterns) {
-                    val match = pattern.find(html)
-                    if (match != null) {
-                        title = match.groupValues[1]
+            val titlePatterns = listOf(
+                Regex(""""title"\s*:\s*"([^"]{1,100})""""),
+                Regex("""title\\":\\"([^"\\]{1,100})\\"""")
+            )
+            for (pattern in titlePatterns) {
+                val matches = pattern.findAll(html).toList()
+                Log.d(TAG, "title匹配数量: ${matches.size}")
+                for (match in matches) {
+                    val t = match.groupValues[1]
+                    if (t.isNotEmpty() && !t.contains("广告") && !t.contains("投放") && t.length > 1) {
+                        title = t
+                        Log.d(TAG, "获取到标题: $title")
                         break
                     }
                 }
+                if (title.isNotEmpty()) break
             }
             
             if (title.isEmpty()) {
-                val titleMatch = Regex("""<title>([^<]+)</title>""").find(html)
-                if (titleMatch != null) {
-                    title = titleMatch.groupValues[1]
+                val htmlTitleMatch = Regex("""<title>([^<]+)</title>""").find(html)
+                if (htmlTitleMatch != null) {
+                    title = htmlTitleMatch.groupValues[1]
+                        .replace("的抖音直播间", "")
                         .replace(" - 抖音直播", "")
                         .replace(" - 字节跳动", "")
                         .trim()
+                    Log.d(TAG, "从HTML标题获取: $title")
                 }
             }
             
-            if (viewerCount == 0L) {
-                val viewerPatterns = listOf(
-                    Regex(""""user_count_str"\s*:\s*"([^"]+)""""),
-                    Regex(""""total_user_count_str"\s*:\s*"([^"]+)""""),
-                    Regex(""""online_user_count_str"\s*:\s*"([^"]+)""""),
-                    Regex(""""online_user_count"\s*:\s*(\d+)"""),
-                    Regex(""""total_user_count"\s*:\s*(\d+)"""),
-                    Regex(""""total"\s*:\s*(\d+)""")
-                )
-                for (pattern in viewerPatterns) {
-                    val matches = pattern.findAll(html).toList()
-                    for (match in matches) {
-                        val value = match.groupValues[1]
-                        Log.d(TAG, "备选匹配到观众数据: $value")
-                        val count = if (value.contains("万") || value.contains("w", ignoreCase = true)) {
-                            parseViewerCount(value)
-                        } else {
-                            value.toLongOrNull() ?: 0
-                        }
-                        if (count > 0) {
-                            viewerCount = count
-                            break
-                        }
+            val countPatterns = listOf(
+                Regex(""""user_count_str"\s*:\s*"([^"]+)""""),
+                Regex(""""total_user_count_str"\s*:\s*"([^"]+)""""),
+                Regex(""""online_user_count_str"\s*:\s*"([^"]+)""""),
+                Regex(""""online_user_count"\s*:\s*(\d+)"""),
+                Regex(""""total"\s*:\s*(\d+)""")
+            )
+            for (pattern in countPatterns) {
+                val matches = pattern.findAll(html).toList()
+                Log.d(TAG, "count匹配数量: ${matches.size} for pattern ${pattern.pattern}")
+                for (match in matches) {
+                    val value = match.groupValues[1]
+                    Log.d(TAG, "匹配到观众数据: $value")
+                    val count = parseViewerCount(value)
+                    if (count > 0) {
+                        viewerCount = count
+                        Log.d(TAG, "解析观众数: $viewerCount")
+                        break
                     }
-                    if (viewerCount > 0) break
                 }
+                if (viewerCount > 0) break
             }
             
-            Log.d(TAG, "获取房间信息 - 主播: $anchorName, 标题: $title, 人数: $viewerCount")
+            Log.d(TAG, "最终结果 - 主播: $anchorName, 标题: $title, 人数: $viewerCount")
             
             currentRoomInfo = RoomInfo(
                 roomId = roomId,

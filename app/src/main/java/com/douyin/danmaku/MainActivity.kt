@@ -187,7 +187,7 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun updateUI() {
-        binding.btnConnect.text = getString(R.string.connect)
+        binding.btnConnect.text = if (isConnected) getString(R.string.disconnect) else getString(R.string.connect)
         
         binding.tvStatus.text = when {
             isConnecting -> getString(R.string.connecting)
@@ -196,7 +196,7 @@ class MainActivity : AppCompatActivity() {
         }
         
         binding.etRoomId.isEnabled = !isConnected && !isConnecting
-        binding.btnConnect.isEnabled = !isConnected && !isConnecting
+        binding.btnConnect.isEnabled = !isConnecting
     }
     
     override fun onDestroy() {
