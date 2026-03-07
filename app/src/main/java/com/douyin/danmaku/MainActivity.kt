@@ -20,6 +20,7 @@ class MainActivity : AppCompatActivity() {
     
     private var isConnected = false
     private var isConnecting = false
+    private var currentViewerCount: Long = 0
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -96,6 +97,12 @@ class MainActivity : AppCompatActivity() {
                     showRoomInfo(roomInfo)
                 }
             }
+            
+            setOnViewerCountCallback { count ->
+                runOnUiThread {
+                    updateViewerCount(count)
+                }
+            }
         }
     }
     
@@ -105,22 +112,28 @@ class MainActivity : AppCompatActivity() {
         
         binding.tvAnchorName.text = roomInfo.anchorName.ifEmpty { "主播" }
         
-        val viewerText = formatViewerCount(roomInfo.viewerCount)
-        binding.tvViewerCount.text = viewerText
+        currentViewerCount = roomInfo.viewerCount
+        binding.tvViewerCount.text = formatViewerCount(currentViewerCount)
         
         binding.tvRoomTitle.text = roomInfo.title.ifEmpty { "直播间" }
+    }
+    
+    private fun updateViewerCount(count: Long) {
+        currentViewerCount = count
+        binding.tvViewerCount.text = formatViewerCount(count)
     }
     
     private fun hideRoomInfo() {
         binding.inputArea.visibility = View.VISIBLE
         binding.roomInfoArea.visibility = View.GONE
+        currentViewerCount = 0
     }
     
     private fun formatViewerCount(count: Long): String {
         return when {
             count >= 10000 -> String.format("%.1f万", count / 10000.0)
             count >= 1000 -> String.format("%.1f千", count / 1000.0)
-            else -> count.toString()
+            else -> "${count}人在线"
         }
     }
     

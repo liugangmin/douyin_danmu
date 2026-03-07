@@ -40,6 +40,7 @@ class DanmakuClient(private val context: Context) {
     private var onDisconnectedCallback: (() -> Unit)? = null
     private var onErrorCallback: ((String) -> Unit)? = null
     private var onRoomInfoCallback: ((RoomInfo) -> Unit)? = null
+    private var onViewerCountCallback: ((Long) -> Unit)? = null
     
     private var ttwid: String? = null
     private var roomId: String? = null
@@ -52,7 +53,6 @@ class DanmakuClient(private val context: Context) {
                 disconnect()
                 Log.d(TAG, "开始连接直播间: $webRoomId")
                 
-                // 初始化签名生成器
                 if (signatureGenerator == null) {
                     signatureGenerator = SignatureGenerator(context)
                     val initSuccess = signatureGenerator!!.init()
@@ -65,22 +65,20 @@ class DanmakuClient(private val context: Context) {
                     }
                 }
                 
-                // 获取ttwid
                 ttwid = fetchTtwid(webRoomId)
                 Log.d(TAG, "获取ttwid: $ttwid")
                 
-                // 获取真实roomId
-                roomId = fetchRoomId(webRoomId, ttwid)
-                Log.d(TAG, "获取roomId: $roomId")
-                
-                if (roomId.isNullOrEmpty()) {
+                val roomData = fetchRoomData(webRoomId, ttwid)
+                if (roomData == null) {
                     withContext(Dispatchers.Main) {
                         onErrorCallback?.invoke("无法获取直播间信息")
                     }
                     return@withContext
                 }
                 
-                // 连接WebSocket
+                roomId = roomData.first
+                Log.d(TAG, "获取roomId: $roomId")
+                
                 connectWebSocket()
                 
             } catch (e: Exception) {
@@ -111,7 +109,7 @@ class DanmakuClient(private val context: Context) {
         }
     }
     
-    private fun fetchRoomId(webRoomId: String, ttwid: String?): String? {
+    private fun fetchRoomData(webRoomId: String, ttwid: String?): Pair<String, RoomInfo>? {
         return try {
             val msToken = generateMsToken()
             val request = Request.Builder()
@@ -135,40 +133,66 @@ class DanmakuClient(private val context: Context) {
                 }
             }
             
-            if (roomId != null) {
-                var title = ""
-                var anchorName = ""
-                var viewerCount: Long = 0
-                
-                val titleMatch = Regex(""""title"\s*:\s*"([^"]*)"""").find(html)
-                if (titleMatch != null) {
-                    title = titleMatch.groupValues[1]
-                }
-                
-                val anchorMatch = Regex(""""nickname"\s*:\s*"([^"]*)"""").find(html)
-                if (anchorMatch != null) {
-                    anchorName = anchorMatch.groupValues[1]
-                }
-                
-                val viewerMatch = Regex(""""user_count_str"\s*:\s*"([^"]*)"""").find(html)
-                if (viewerMatch != null) {
-                    viewerCount = parseViewerCount(viewerMatch.groupValues[1])
-                }
-                
-                currentRoomInfo = RoomInfo(
-                    roomId = roomId,
-                    webRoomId = webRoomId,
-                    title = title,
-                    anchorName = anchorName,
-                    viewerCount = viewerCount
-                )
-                
-                handler.post {
-                    currentRoomInfo?.let { onRoomInfoCallback?.invoke(it) }
+            if (roomId == null) return null
+            
+            var title = ""
+            var anchorName = ""
+            var viewerCount: Long = 0
+            
+            val titlePatterns = listOf(
+                Regex(""""title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)""""),
+                Regex("""title\\":\\"([^"\\]*(?:\\.[^"\\]*)*)\\"""")
+            )
+            for (pattern in titlePatterns) {
+                val match = pattern.find(html)
+                if (match != null) {
+                    title = match.groupValues[1].replace("\\u002F", "/")
+                        .replace("\\/", "/")
+                        .replace("\\\"", "\"")
+                        .replace("\\n", "\n")
+                    break
                 }
             }
             
-            roomId
+            val anchorPatterns = listOf(
+                Regex(""""nickname"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)""""),
+                Regex("""nickname\\":\\"([^"\\]*(?:\\.[^"\\]*)*)\\"""")
+            )
+            for (pattern in anchorPatterns) {
+                val match = pattern.find(html)
+                if (match != null) {
+                    anchorName = match.groupValues[1]
+                    break
+                }
+            }
+            
+            val viewerPatterns = listOf(
+                Regex(""""user_count_str"\s*:\s*"([^"]*)""""),
+                Regex("""user_count_str\\":\\"([^"]*)\\"""")
+            )
+            for (pattern in viewerPatterns) {
+                val match = pattern.find(html)
+                if (match != null) {
+                    viewerCount = parseViewerCount(match.groupValues[1])
+                    break
+                }
+            }
+            
+            Log.d(TAG, "获取房间信息 - 主播: $anchorName, 标题: $title, 人数: $viewerCount")
+            
+            currentRoomInfo = RoomInfo(
+                roomId = roomId,
+                webRoomId = webRoomId,
+                title = title,
+                anchorName = anchorName,
+                viewerCount = viewerCount
+            )
+            
+            handler.post {
+                currentRoomInfo?.let { onRoomInfoCallback?.invoke(it) }
+            }
+            
+            Pair(roomId, currentRoomInfo!!)
         } catch (e: Exception) {
             Log.e(TAG, "获取roomId失败", e)
             null
@@ -306,7 +330,6 @@ class DanmakuClient(private val context: Context) {
             val decompressed = GZIPInputStream(payload.inputStream()).readBytes()
             val protoResponse = com.douyin.danmaku.proto.Response.parseFrom(decompressed)
             
-            // 发送ACK
             if (protoResponse.needAck && protoResponse.internalExt.isNotEmpty()) {
                 val ack = PushFrame.newBuilder()
                     .setLogId(pushFrame.logId)
@@ -317,7 +340,6 @@ class DanmakuClient(private val context: Context) {
                 webSocket?.send(ack.toByteString())
             }
             
-            // 解析消息列表
             val messages = protoResponse.messagesList
             for (i in 0 until messages.size) {
                 val msg = messages.get(i)
@@ -330,7 +352,8 @@ class DanmakuClient(private val context: Context) {
                         method.contains("GiftMessage") -> parseGiftMessage(msg.payload.toByteArray())
                         method.contains("LikeMessage") -> parseLikeMessage(msg.payload.toByteArray())
                         method.contains("SocialMessage") -> parseSocialMessage(msg.payload.toByteArray())
-                        else -> {} // 忽略其他消息类型（包括MemberMessage进场消息）
+                        method.contains("RoomUserSeqMessage") -> parseRoomUserSeqMessage(msg.payload.toByteArray())
+                        else -> {}
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "解析 $method 失败", e)
@@ -390,6 +413,19 @@ class DanmakuClient(private val context: Context) {
         }
     }
     
+    private fun parseRoomUserSeqMessage(data: ByteArray) {
+        try {
+            val msg = RoomUserSeqMessage.parseFrom(data)
+            val onlineCount = msg.onlineUserCount
+            Log.d(TAG, "实时在线人数: $onlineCount")
+            handler.post {
+                onViewerCountCallback?.invoke(onlineCount)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "解析RoomUserSeqMessage失败", e)
+        }
+    }
+    
     fun disconnect() {
         stopHeartbeat()
         webSocket?.close(1000, "User disconnect")
@@ -418,5 +454,9 @@ class DanmakuClient(private val context: Context) {
     
     fun setOnRoomInfoCallback(callback: (RoomInfo) -> Unit) {
         onRoomInfoCallback = callback
+    }
+    
+    fun setOnViewerCountCallback(callback: (Long) -> Unit) {
+        onViewerCountCallback = callback
     }
 }

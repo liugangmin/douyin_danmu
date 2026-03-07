@@ -61,6 +61,12 @@ message SocialMessage {
   uint64 action = 4;
 }
 
+message RoomUserSeqMessage {
+  uint64 total = 2;
+  uint64 totalPv = 3;
+  uint64 onlineUserCount = 4;
+}
+
 message User {
   uint64 id = 1;
   string nickName = 3;
