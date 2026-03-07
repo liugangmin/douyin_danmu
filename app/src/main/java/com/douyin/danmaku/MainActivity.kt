@@ -115,7 +115,12 @@ class MainActivity : AppCompatActivity() {
         currentViewerCount = roomInfo.viewerCount
         binding.tvViewerCount.text = formatViewerCount(currentViewerCount)
         
-        binding.tvRoomTitle.text = roomInfo.title.ifEmpty { "直播间" }
+        if (roomInfo.title.isNotEmpty()) {
+            binding.tvRoomTitle.text = roomInfo.title
+            binding.tvRoomTitle.visibility = View.VISIBLE
+        } else {
+            binding.tvRoomTitle.visibility = View.GONE
+        }
     }
     
     private fun updateViewerCount(count: Long) {

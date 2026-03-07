@@ -179,22 +179,27 @@ class DanmakuClient(private val context: Context) {
             }
             
             val titlePatterns = listOf(
-                Regex(""""title":\s*"([^"]+)","count_map""""),
-                Regex(""""live_room_title":\s*"([^"]+)""""),
+                Regex(""""title"\s*:\s*"([^"]+)""""),
+                Regex(""""live_room_title"\s*:\s*"([^"]+)""""),
+                Regex("""title\\":\\"([^"\\]+)"""),
                 Regex("""live_room_title\\":\\"([^"\\]+)""")
             )
             for (pattern in titlePatterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    title = match.groupValues[1]
-                    break
+                val matches = pattern.findAll(html).toList()
+                for (match in matches) {
+                    val t = match.groupValues[1]
+                    if (t.isNotEmpty() && t.length > 1 && !t.contains("广告") && !t.contains("投放")) {
+                        title = t
+                        break
+                    }
                 }
+                if (title.isNotEmpty()) break
             }
             
             val countStrPatterns = listOf(
-                Regex(""""user_count_str":\s*"([^"]+)""""),
-                Regex(""""online_count_str":\s*"([^"]+)""""),
-                Regex(""""total_user_count_str":\s*"([^"]+)""""),
+                Regex(""""user_count_str"\s*:\s*"([^"]+)""""),
+                Regex(""""online_count_str"\s*:\s*"([^"]+)""""),
+                Regex(""""total_user_count_str"\s*:\s*"([^"]+)""""),
                 Regex("""user_count_str\\":\\"([^"\\]+)""")
             )
             for (pattern in countStrPatterns) {
@@ -208,9 +213,9 @@ class DanmakuClient(private val context: Context) {
             
             if (viewerCount == 0L) {
                 val countNumPatterns = listOf(
-                    Regex(""""online_user_count":\s*(\d+)"""),
-                    Regex(""""user_count":\s*(\d+)"""),
-                    Regex(""""total":\s*(\d+)""")
+                    Regex(""""online_user_count"\s*:\s*(\d+)"""),
+                    Regex(""""user_count"\s*:\s*(\d+)"""),
+                    Regex(""""total"\s*:\s*(\d+)""")
                 )
                 for (pattern in countNumPatterns) {
                     val match = pattern.find(html)
