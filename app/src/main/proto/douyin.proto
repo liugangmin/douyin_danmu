@@ -91,7 +91,16 @@ message RoomUserSeqMessage {
 message User {
   uint64 id = 1;
   string nickName = 3;
-  int32 level = 4;
-  int32 fansClubLevel = 5;
-  string fansClubName = 6;
+  repeated BadgeImage badgeImageList = 11;
+}
+
+message BadgeImage {
+  repeated string urlList = 1;
+  int32 imageType = 5;
+  BadgeContent content = 6;
+}
+
+message BadgeContent {
+  string level = 1;
+  string name = 2;
 }

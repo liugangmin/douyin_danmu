@@ -436,15 +436,34 @@ class DanmakuClient(private val context: Context) {
                 }
             }
             
+            var userLevel = 0
+            var fansClubLevel = 0
+            var fansClubName = ""
+            
+            user.badgeImageListList.forEach { badge ->
+                val content = badge.content
+                if (content != null) {
+                    when (badge.imageType) {
+                        1 -> {
+                            userLevel = content.level.toIntOrNull() ?: 0
+                        }
+                        7 -> {
+                            fansClubLevel = content.level.toIntOrNull() ?: 0
+                            fansClubName = content.name
+                        }
+                    }
+                }
+            }
+            
             onDanmakuCallback?.invoke(DanmakuMessage(
                 type = DanmakuType.CHAT,
                 nickname = user.nickName,
                 content = msg.content,
                 userId = user.id.toString(),
                 emojis = emojis,
-                userLevel = user.level,
-                fansClubLevel = user.fansClubLevel,
-                fansClubName = user.fansClubName
+                userLevel = userLevel,
+                fansClubLevel = fansClubLevel,
+                fansClubName = fansClubName
             ))
         }
     }
