@@ -131,11 +131,11 @@
             <Button
                 android:id="@+id/btnDisconnect"
                 android:layout_width="wrap_content"
-                android:layout_height="32dp"
+                android:layout_height="36dp"
                 android:background="@drawable/bg_button"
-                android:minWidth="60dp"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
+                android:minWidth="64dp"
+                android:paddingStart="20dp"
+                android:paddingEnd="20dp"
                 android:text="@string/disconnect"
                 android:textColor="@color/white"
                 android:textSize="12sp" />

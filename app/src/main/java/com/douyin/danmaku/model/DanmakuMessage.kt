@@ -6,7 +6,13 @@ data class DanmakuMessage(
     val nickname: String,
     val content: String,
     val userId: String = "",
-    val timestamp: Long = System.currentTimeMillis()
+    val timestamp: Long = System.currentTimeMillis(),
+    val emojis: List<EmojiInfo> = emptyList()
+)
+
+data class EmojiInfo(
+    val text: String,
+    val url: String
 )
 
 enum class DanmakuType {

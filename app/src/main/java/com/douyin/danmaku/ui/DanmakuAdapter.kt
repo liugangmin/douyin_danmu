@@ -11,6 +11,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.douyin.danmaku.databinding.ItemDanmakuBinding
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.model.DanmakuType
+import com.douyin.danmaku.model.EmojiInfo
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -27,7 +28,6 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
     
     private val client = OkHttpClient.Builder().build()
     private val emojiCache = ConcurrentHashMap<String, Bitmap>()
-    private val emojiUrlCache = ConcurrentHashMap<String, String>()
     
     fun addMessage(message: DanmakuMessage): Int {
         if (message.type == DanmakuType.LIKE) {
@@ -74,11 +74,11 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
                 DanmakuType.CHAT -> {
                     binding.tvNickname.text = "${message.nickname}："
                     binding.tvNickname.setTextColor(0xFF2196F3.toInt())
-                    val content = message.content
-                    if (containsEmoji(content)) {
-                        parseAndSetEmojiText(context, content, binding.tvContent.textSize)
+                    
+                    if (message.emojis.isNotEmpty()) {
+                        parseAndSetEmojiText(context, message.content, message.emojis, binding.tvContent.textSize)
                     } else {
-                        binding.tvContent.text = content
+                        binding.tvContent.text = message.content
                     }
                     binding.tvContent.setTextColor(0xFFFFFFFF.toInt())
                 }
@@ -118,43 +118,31 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
             }
         }
         
-        private fun containsEmoji(text: String): Boolean {
-            return text.contains("[") && text.contains("]")
-        }
-        
-        private fun parseAndSetEmojiText(context: android.content.Context, text: String, textSize: Float) {
+        private fun parseAndSetEmojiText(
+            context: android.content.Context, 
+            text: String, 
+            emojis: List<EmojiInfo>,
+            textSize: Float
+        ) {
             val spannable = SpannableString(text)
-            val pattern = Regex("\\[([^\\[\\]]+)\\]")
             val emojiSize = (textSize * 1.3).toInt()
-            
-            val matches = pattern.findAll(text).toList()
-            if (matches.isEmpty()) {
-                binding.tvContent.text = text
-                return
-            }
             
             binding.tvContent.text = text
             
             CoroutineScope(Dispatchers.Main).launch {
-                for (match in matches) {
-                    val emojiCode = match.groupValues[1]
-                    val url = getEmojiUrl(emojiCode)
-                    
-                    val bitmap = loadEmojiBitmap(context, url)
-                    if (bitmap != null) {
-                        val scaledBitmap = Bitmap.createScaledBitmap(bitmap, emojiSize, emojiSize, true)
-                        val span = ImageSpan(context, scaledBitmap, ImageSpan.ALIGN_BASELINE)
-                        spannable.setSpan(span, match.range.first, match.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                for (emoji in emojis) {
+                    val emojiText = emoji.text
+                    val startIndex = text.indexOf(emojiText)
+                    if (startIndex >= 0) {
+                        val bitmap = loadEmojiBitmap(context, emoji.url)
+                        if (bitmap != null) {
+                            val scaledBitmap = Bitmap.createScaledBitmap(bitmap, emojiSize, emojiSize, true)
+                            val span = ImageSpan(context, scaledBitmap, ImageSpan.ALIGN_BASELINE)
+                            spannable.setSpan(span, startIndex, startIndex + emojiText.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        }
                     }
                 }
-                
                 binding.tvContent.text = spannable
-            }
-        }
-        
-        private fun getEmojiUrl(code: String): String {
-            return emojiUrlCache.getOrPut(code) {
-                "https://p3-webcast.douyinpic.com/img/webcast/emoji_normal/$code.png"
             }
         }
         

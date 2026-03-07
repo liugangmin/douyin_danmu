@@ -411,11 +411,15 @@ class DanmakuClient(private val context: Context) {
         val msg = ChatMessage.parseFrom(data)
         val user = msg.user ?: return
         if (msg.content.isNotEmpty()) {
+            val emojis = msg.emojisList.map { emoji ->
+                EmojiInfo(text = emoji.text, url = emoji.url)
+            }
             onDanmakuCallback?.invoke(DanmakuMessage(
                 type = DanmakuType.CHAT,
                 nickname = user.nickName,
                 content = msg.content,
-                userId = user.id.toString()
+                userId = user.id.toString(),
+                emojis = emojis
             ))
         }
     }
