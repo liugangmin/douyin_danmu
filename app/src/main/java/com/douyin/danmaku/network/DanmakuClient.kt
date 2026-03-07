@@ -441,7 +441,10 @@ class DanmakuClient(private val context: Context) {
                 nickname = user.nickName,
                 content = msg.content,
                 userId = user.id.toString(),
-                emojis = emojis
+                emojis = emojis,
+                userLevel = user.level,
+                fansClubLevel = user.fansClubLevel,
+                fansClubName = user.fansClubName
             ))
         }
     }

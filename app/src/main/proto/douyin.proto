@@ -91,4 +91,7 @@ message RoomUserSeqMessage {
 message User {
   uint64 id = 1;
   string nickName = 3;
+  int32 level = 4;
+  int32 fansClubLevel = 5;
+  string fansClubName = 6;
 }

@@ -1,12 +1,13 @@
 package com.douyin.danmaku.ui
 
+import android.graphics.drawable.GradientDrawable
 import android.view.LayoutInflater
 import android.view.ViewGroup
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import com.douyin.danmaku.databinding.ItemDanmakuBinding
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.model.DanmakuType
-import com.douyin.danmaku.model.EmojiInfo
 
 class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() {
     
@@ -245,44 +246,82 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
         fun bind(message: DanmakuMessage) {
             when (message.type) {
                 DanmakuType.CHAT -> {
+                    bindLevel(message.userLevel)
                     binding.tvNickname.text = "${message.nickname}："
                     binding.tvNickname.setTextColor(0xFF2196F3.toInt())
                     binding.tvContent.text = convertEmojiText(message.content)
                     binding.tvContent.setTextColor(0xFFFFFFFF.toInt())
                 }
                 DanmakuType.GIFT -> {
+                    binding.tvLevel.isVisible = false
                     binding.tvNickname.text = message.nickname
                     binding.tvNickname.setTextColor(0xFFFFD700.toInt())
                     binding.tvContent.text = " ${message.content}"
                     binding.tvContent.setTextColor(0xFFFFD700.toInt())
                 }
                 DanmakuType.ENTER -> {
+                    binding.tvLevel.isVisible = false
                     binding.tvNickname.text = message.nickname
                     binding.tvNickname.setTextColor(0xFF00BCD4.toInt())
                     binding.tvContent.text = " ${message.content}"
                     binding.tvContent.setTextColor(0xFF00BCD4.toInt())
                 }
                 DanmakuType.FOLLOW -> {
+                    binding.tvLevel.isVisible = false
                     binding.tvNickname.text = message.nickname
                     binding.tvNickname.setTextColor(0xFF4CAF50.toInt())
                     binding.tvContent.text = " ${message.content}"
                     binding.tvContent.setTextColor(0xFF4CAF50.toInt())
                 }
                 DanmakuType.FANS_CLUB -> {
+                    binding.tvLevel.isVisible = false
                     binding.tvNickname.text = message.nickname
                     binding.tvNickname.setTextColor(0xFFFFC107.toInt())
                     binding.tvContent.text = " ${message.content}"
                     binding.tvContent.setTextColor(0xFFFFC107.toInt())
                 }
                 DanmakuType.STATS -> {
+                    binding.tvLevel.isVisible = false
                     binding.tvNickname.text = ""
                     binding.tvContent.text = message.content
                     binding.tvContent.setTextColor(0xFF9C27B0.toInt())
                 }
                 DanmakuType.LIKE -> {
+                    binding.tvLevel.isVisible = false
                     binding.tvNickname.text = ""
                     binding.tvContent.text = ""
                 }
+            }
+        }
+        
+        private fun bindLevel(level: Int) {
+            if (level > 0) {
+                binding.tvLevel.isVisible = true
+                binding.tvLevel.text = "Lv.$level"
+                
+                val (bgColor, textColor) = getLevelColors(level)
+                
+                val drawable = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 4f
+                    setColor(bgColor)
+                }
+                binding.tvLevel.background = drawable
+                binding.tvLevel.setTextColor(textColor)
+                binding.tvLevel.setPadding(4, 1, 4, 1)
+            } else {
+                binding.tvLevel.isVisible = false
+            }
+        }
+        
+        private fun getLevelColors(level: Int): Pair<Int, Int> {
+            return when {
+                level <= 10 -> Pair(0xFF4CAF50.toInt(), 0xFFFFFFFF.toInt())
+                level <= 20 -> Pair(0xFF2196F3.toInt(), 0xFFFFFFFF.toInt())
+                level <= 30 -> Pair(0xFF9C27B0.toInt(), 0xFFFFFFFF.toInt())
+                level <= 40 -> Pair(0xFFFF9800.toInt(), 0xFFFFFFFF.toInt())
+                level <= 50 -> Pair(0xFFF44336.toInt(), 0xFFFFFFFF.toInt())
+                else -> Pair(0xFFFFD700.toInt(), 0xFF000000.toInt())
             }
         }
         

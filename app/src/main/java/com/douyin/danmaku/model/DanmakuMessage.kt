@@ -7,7 +7,10 @@ data class DanmakuMessage(
     val content: String,
     val userId: String = "",
     val timestamp: Long = System.currentTimeMillis(),
-    val emojis: List<EmojiInfo> = emptyList()
+    val emojis: List<EmojiInfo> = emptyList(),
+    val userLevel: Int = 0,
+    val fansClubLevel: Int = 0,
+    val fansClubName: String = ""
 )
 
 data class EmojiInfo(
