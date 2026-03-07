@@ -194,10 +194,22 @@ class MainActivity : AppCompatActivity() {
     private fun updateUI() {
         binding.btnConnect.text = if (isConnected) getString(R.string.disconnect) else getString(R.string.connect)
         
-        binding.tvStatus.text = when {
-            isConnecting -> getString(R.string.connecting)
-            isConnected -> getString(R.string.connected)
-            else -> getString(R.string.disconnected)
+        when {
+            isConnecting -> {
+                binding.tvStatus.text = getString(R.string.connecting)
+                binding.tvStatus.setCompoundDrawablesWithIntrinsicBounds(R.drawable.status_connecting, 0, 0, 0)
+                binding.tvStatus.setTextColor(0xFF888888.toInt())
+            }
+            isConnected -> {
+                binding.tvStatus.text = getString(R.string.connected)
+                binding.tvStatus.setCompoundDrawablesWithIntrinsicBounds(R.drawable.status_connected, 0, 0, 0)
+                binding.tvStatus.setTextColor(0xFF00FF00.toInt())
+            }
+            else -> {
+                binding.tvStatus.text = getString(R.string.disconnected)
+                binding.tvStatus.setCompoundDrawablesWithIntrinsicBounds(R.drawable.status_disconnected, 0, 0, 0)
+                binding.tvStatus.setTextColor(0xFF888888.toInt())
+            }
         }
         
         binding.etRoomId.isEnabled = !isConnected && !isConnecting
