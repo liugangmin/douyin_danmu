@@ -172,10 +172,13 @@ class DanmakuClient(private val context: Context) {
                 }
             }
             
-            if (anchorName.isEmpty()) {
-                val roomInfoMatch = Regex(""""room"\s*:\s*\{[^}]*"owner"\s*:\s*\{[^}]*"nickname"\s*:\s*"([^"]+)"[^}]*\}[^}]*\}""").find(html)
-                if (roomInfoMatch != null) {
-                    anchorName = roomInfoMatch.groupValues[1]
+            val renderDataMatch = Regex("""RENDER_DATA\s*=\s*({[^;]+})""").find(html)
+            if (renderDataMatch != null) {
+                try {
+                    val jsonStr = renderDataMatch.groupValues[1]
+                    Log.d(TAG, "找到RENDER_DATA，长度: ${jsonStr.length}")
+                } catch (e: Exception) {
+                    Log.e(TAG, "解析RENDER_DATA失败", e)
                 }
             }
             
@@ -195,15 +198,27 @@ class DanmakuClient(private val context: Context) {
                     }
                 }
                 val roomJson = html.substring(startIndex, endIndex)
+                Log.d(TAG, "room JSON 长度: ${roomJson.length}")
                 
                 val titleMatch = Regex(""""title"\s*:\s*"([^"]+)"""").find(roomJson)
                 if (titleMatch != null) {
                     title = titleMatch.groupValues[1]
+                    Log.d(TAG, "从room中获取标题: $title")
                 }
                 
-                val viewerMatch = Regex(""""user_count_str"\s*:\s*"([^"]+)"""").find(roomJson)
-                if (viewerMatch != null) {
-                    viewerCount = parseViewerCount(viewerMatch.groupValues[1])
+                val viewerStrPatterns = listOf(
+                    Regex(""""user_count_str"\s*:\s*"([^"]+)""""),
+                    Regex(""""total_user_count_str"\s*:\s*"([^"]+)""""),
+                    Regex(""""online_user_count_str"\s*:\s*"([^"]+)"""")
+                )
+                for (pattern in viewerStrPatterns) {
+                    val match = pattern.find(roomJson)
+                    if (match != null) {
+                        val countStr = match.groupValues[1]
+                        Log.d(TAG, "找到观众数字符串: $countStr")
+                        viewerCount = parseViewerCount(countStr)
+                        if (viewerCount > 0) break
+                    }
                 }
             }
             
@@ -233,16 +248,29 @@ class DanmakuClient(private val context: Context) {
             
             if (viewerCount == 0L) {
                 val viewerPatterns = listOf(
+                    Regex(""""user_count_str"\s*:\s*"([^"]+)""""),
+                    Regex(""""total_user_count_str"\s*:\s*"([^"]+)""""),
+                    Regex(""""online_user_count_str"\s*:\s*"([^"]+)""""),
                     Regex(""""online_user_count"\s*:\s*(\d+)"""),
                     Regex(""""total_user_count"\s*:\s*(\d+)"""),
                     Regex(""""total"\s*:\s*(\d+)""")
                 )
                 for (pattern in viewerPatterns) {
-                    val match = pattern.find(html)
-                    if (match != null) {
-                        viewerCount = match.groupValues[1].toLongOrNull() ?: 0
-                        if (viewerCount > 0) break
+                    val matches = pattern.findAll(html).toList()
+                    for (match in matches) {
+                        val value = match.groupValues[1]
+                        Log.d(TAG, "备选匹配到观众数据: $value")
+                        val count = if (value.contains("万") || value.contains("w", ignoreCase = true)) {
+                            parseViewerCount(value)
+                        } else {
+                            value.toLongOrNull() ?: 0
+                        }
+                        if (count > 0) {
+                            viewerCount = count
+                            break
+                        }
                     }
+                    if (viewerCount > 0) break
                 }
             }
             
