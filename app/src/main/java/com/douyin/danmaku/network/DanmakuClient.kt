@@ -68,16 +68,17 @@ class DanmakuClient(private val context: Context) {
                 ttwid = fetchTtwid(webRoomId)
                 Log.d(TAG, "获取ttwid: $ttwid")
                 
-                val roomData = fetchRoomData(webRoomId, ttwid)
-                if (roomData == null) {
+                roomId = fetchRoomId(webRoomId, ttwid)
+                Log.d(TAG, "获取roomId: $roomId")
+                
+                if (roomId.isNullOrEmpty()) {
                     withContext(Dispatchers.Main) {
                         onErrorCallback?.invoke("无法获取直播间信息")
                     }
                     return@withContext
                 }
                 
-                roomId = roomData.first
-                Log.d(TAG, "获取roomId: $roomId")
+                fetchRoomInfo(webRoomId, ttwid, roomId!!)
                 
                 connectWebSocket()
                 
@@ -109,7 +110,7 @@ class DanmakuClient(private val context: Context) {
         }
     }
     
-    private fun fetchRoomData(webRoomId: String, ttwid: String?): Pair<String, RoomInfo>? {
+    private fun fetchRoomId(webRoomId: String, ttwid: String?): String? {
         return try {
             val msToken = generateMsToken()
             val request = Request.Builder()
@@ -120,7 +121,6 @@ class DanmakuClient(private val context: Context) {
             val response = client.newCall(request).execute()
             val html = response.body?.string() ?: return null
             
-            var roomId: String? = null
             val patterns = listOf(
                 Regex("""roomId\\":\\"(\d+)\\""""),
                 Regex(""""roomId":\s*"?(\d+)"?""")
@@ -128,54 +128,44 @@ class DanmakuClient(private val context: Context) {
             for (pattern in patterns) {
                 val match = pattern.find(html)
                 if (match != null) {
-                    roomId = match.groupValues[1]
-                    break
+                    return match.groupValues[1]
                 }
             }
-            
-            if (roomId == null) return null
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "获取roomId失败", e)
+            null
+        }
+    }
+    
+    private fun fetchRoomInfo(webRoomId: String, ttwid: String?, roomId: String) {
+        try {
+            val msToken = generateMsToken()
+            val request = Request.Builder()
+                .url("https://live.douyin.com/$webRoomId")
+                .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+                .header("Cookie", "ttwid=${ttwid ?: ""}; msToken=$msToken")
+                .build()
+            val response = client.newCall(request).execute()
+            val html = response.body?.string() ?: return
             
             var title = ""
             var anchorName = ""
             var viewerCount: Long = 0
             
-            val titlePatterns = listOf(
-                Regex(""""title"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)""""),
-                Regex("""title\\":\\"([^"\\]*(?:\\.[^"\\]*)*)\\"""")
-            )
-            for (pattern in titlePatterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    title = match.groupValues[1].replace("\\u002F", "/")
-                        .replace("\\/", "/")
-                        .replace("\\\"", "\"")
-                        .replace("\\n", "\n")
-                    break
-                }
+            val titleMatch = Regex(""""title"\s*:\s*"([^"]*)"""").find(html)
+            if (titleMatch != null) {
+                title = titleMatch.groupValues[1]
             }
             
-            val anchorPatterns = listOf(
-                Regex(""""nickname"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)""""),
-                Regex("""nickname\\":\\"([^"\\]*(?:\\.[^"\\]*)*)\\"""")
-            )
-            for (pattern in anchorPatterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    anchorName = match.groupValues[1]
-                    break
-                }
+            val anchorMatch = Regex(""""nickname"\s*:\s*"([^"]*)"""").find(html)
+            if (anchorMatch != null) {
+                anchorName = anchorMatch.groupValues[1]
             }
             
-            val viewerPatterns = listOf(
-                Regex(""""user_count_str"\s*:\s*"([^"]*)""""),
-                Regex("""user_count_str\\":\\"([^"]*)\\"""")
-            )
-            for (pattern in viewerPatterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    viewerCount = parseViewerCount(match.groupValues[1])
-                    break
-                }
+            val viewerMatch = Regex(""""user_count_str"\s*:\s*"([^"]*)"""").find(html)
+            if (viewerMatch != null) {
+                viewerCount = parseViewerCount(viewerMatch.groupValues[1])
             }
             
             Log.d(TAG, "获取房间信息 - 主播: $anchorName, 标题: $title, 人数: $viewerCount")
@@ -191,11 +181,8 @@ class DanmakuClient(private val context: Context) {
             handler.post {
                 currentRoomInfo?.let { onRoomInfoCallback?.invoke(it) }
             }
-            
-            Pair(roomId, currentRoomInfo!!)
         } catch (e: Exception) {
-            Log.e(TAG, "获取roomId失败", e)
-            null
+            Log.e(TAG, "获取房间信息失败", e)
         }
     }
     
