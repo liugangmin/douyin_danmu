@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
+import java.net.URLEncoder
 import java.util.concurrent.ConcurrentHashMap
 
 class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() {
@@ -28,6 +29,7 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
     
     private val client = OkHttpClient.Builder().build()
     private val emojiCache = ConcurrentHashMap<String, Bitmap>()
+    private val failedEmojis = ConcurrentHashMap<String, Boolean>()
     
     fun addMessage(message: DanmakuMessage): Int {
         if (message.type == DanmakuType.LIKE) {
@@ -140,18 +142,27 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
             binding.tvContent.text = text
             
             CoroutineScope(Dispatchers.Main).launch {
+                var hasUpdate = false
                 for (match in matches) {
                     val emojiCode = match.groupValues[1]
-                    val url = getEmojiUrl(emojiCode)
                     
-                    val bitmap = loadEmojiBitmap(context, url)
+                    if (failedEmojis.containsKey(emojiCode)) {
+                        continue
+                    }
+                    
+                    val bitmap = loadEmojiWithFallback(context, emojiCode)
                     if (bitmap != null) {
                         val scaledBitmap = Bitmap.createScaledBitmap(bitmap, emojiSize, emojiSize, true)
                         val span = ImageSpan(context, scaledBitmap, ImageSpan.ALIGN_BASELINE)
                         spannable.setSpan(span, match.range.first, match.range.last + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+                        hasUpdate = true
+                    } else {
+                        failedEmojis[emojiCode] = true
                     }
                 }
-                binding.tvContent.text = spannable
+                if (hasUpdate) {
+                    binding.tvContent.text = spannable
+                }
             }
         }
         
@@ -170,7 +181,7 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
                 for (emoji in emojis) {
                     val emojiText = emoji.text
                     val startIndex = text.indexOf(emojiText)
-                    if (startIndex >= 0) {
+                    if (startIndex >= 0 && emoji.url.isNotEmpty()) {
                         val bitmap = loadEmojiBitmap(context, emoji.url)
                         if (bitmap != null) {
                             val scaledBitmap = Bitmap.createScaledBitmap(bitmap, emojiSize, emojiSize, true)
@@ -183,8 +194,28 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
             }
         }
         
-        private fun getEmojiUrl(code: String): String {
-            return "https://p3-webcast.douyinpic.com/img/webcast/emoji/$code.png"
+        private suspend fun loadEmojiWithFallback(context: android.content.Context, code: String): Bitmap? {
+            val urls = getEmojiUrls(code)
+            
+            for (url in urls) {
+                val bitmap = loadEmojiBitmap(context, url)
+                if (bitmap != null) {
+                    return bitmap
+                }
+            }
+            return null
+        }
+        
+        private fun getEmojiUrls(code: String): List<String> {
+            val encoded = URLEncoder.encode(code, "UTF-8")
+            return listOf(
+                "https://p3-webcast.douyinpic.com/img/webcast/emoji/$encoded.png",
+                "https://p3-webcast.douyinpic.com/img/webcast/emoji_normal/$encoded.png",
+                "https://p3-webcast.douyinpic.com/img/webcast/emoji_new/$encoded.png",
+                "https://lf3-static.bytednsdoc.com/obj/eden-cn/hjeh7pldnulm/$encoded.png",
+                "https://p9-webcast.douyinpic.com/img/webcast/emoji/$encoded.png",
+                "https://p6-webcast.douyinpic.com/img/webcast/emoji/$encoded.png"
+            )
         }
         
         private suspend fun loadEmojiBitmap(context: android.content.Context, url: String): Bitmap? {
