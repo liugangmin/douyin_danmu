@@ -30,7 +30,10 @@ class MainActivity : AppCompatActivity() {
     
     private fun initViews() {
         adapter = DanmakuAdapter()
-        binding.rvDanmaku.layoutManager = LinearLayoutManager(this)
+        val layoutManager = LinearLayoutManager(this)
+        // 设置堆栈从底部开始，新消息会在底部
+        layoutManager.stackFromEnd = true
+        binding.rvDanmaku.layoutManager = layoutManager
         binding.rvDanmaku.adapter = adapter
         
         binding.btnConnect.setOnClickListener { connect() }
@@ -40,7 +43,11 @@ class MainActivity : AppCompatActivity() {
     private fun initClient() {
         danmakuClient = DanmakuClient(this).apply {
             setOnDanmakuCallback { message ->
-                runOnUiThread { adapter.addMessage(message) }
+                runOnUiThread {
+                    val position = adapter.addMessage(message)
+                    // 自动滚动到最新消息
+                    binding.rvDanmaku.scrollToPosition(position)
+                }
             }
             
             setOnConnectedCallback {

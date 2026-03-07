@@ -15,13 +15,17 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
     private val items = mutableListOf<DanmakuMessage>()
     private val maxSize = 500 // 最大显示数量
     
-    fun addMessage(message: DanmakuMessage) {
-        items.add(0, message)
+    fun addMessage(message: DanmakuMessage): Int {
+        // 新消息添加到末尾（最新消息在底部）
+        items.add(message)
         if (items.size > maxSize) {
-            items.removeAt(items.size - 1)
-            notifyItemRemoved(items.size)
+            items.removeAt(0)
+            notifyItemRemoved(0)
+            notifyItemRangeChanged(0, items.size)
         }
-        notifyItemInserted(0)
+        val position = items.size - 1
+        notifyItemInserted(position)
+        return position
     }
     
     fun clear() {
