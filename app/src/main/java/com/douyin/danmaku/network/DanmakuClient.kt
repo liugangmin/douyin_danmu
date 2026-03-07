@@ -387,7 +387,6 @@ class DanmakuClient(private val context: Context) {
             for (i in 0 until messages.size) {
                 val msg = messages.get(i)
                 val method = msg.method
-                Log.d(TAG, "收到消息类型: $method")
                 
                 try {
                     when {
@@ -396,14 +395,15 @@ class DanmakuClient(private val context: Context) {
                         method.contains("LikeMessage") -> parseLikeMessage(msg.payload.toByteArray())
                         method.contains("SocialMessage") -> parseSocialMessage(msg.payload.toByteArray())
                         method.contains("RoomUserSeqMessage") -> parseRoomUserSeqMessage(msg.payload.toByteArray())
+                        method.contains("UserSeqMessage") -> parseRoomUserSeqMessage(msg.payload.toByteArray())
+                        method.contains("OnlineUserCount") -> parseRoomUserSeqMessage(msg.payload.toByteArray())
+                        method.contains("MemberMessage") -> parseMemberMessage(msg.payload.toByteArray())
                         else -> {}
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "解析 $method 失败", e)
                 }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "解析PushFrame失败", e)
         }
     }
     
@@ -417,6 +417,19 @@ class DanmakuClient(private val context: Context) {
                 content = msg.content,
                 userId = user.id.toString()
             ))
+        }
+    }
+    
+    private fun parseMemberMessage(data: ByteArray) {
+        try {
+            val msg = MemberMessage.parseFrom(data)
+            val count = msg.memberCount
+            if (count > 0) {
+                handler.post {
+                    onViewerCountCallback?.invoke(count)
+                }
+            }
+        } catch (e: Exception) {
         }
     }
     
@@ -459,13 +472,19 @@ class DanmakuClient(private val context: Context) {
     private fun parseRoomUserSeqMessage(data: ByteArray) {
         try {
             val msg = RoomUserSeqMessage.parseFrom(data)
-            val onlineCount = msg.onlineUserCount
-            Log.d(TAG, "实时在线人数: $onlineCount")
-            handler.post {
-                onViewerCountCallback?.invoke(onlineCount)
+            var count = msg.onlineUserCount
+            if (count == 0L) {
+                count = msg.total
+            }
+            if (count == 0L) {
+                count = msg.totalPv
+            }
+            if (count > 0) {
+                handler.post {
+                    onViewerCountCallback?.invoke(count)
+                }
             }
         } catch (e: Exception) {
-            Log.e(TAG, "解析RoomUserSeqMessage失败", e)
         }
     }
     
