@@ -179,16 +179,45 @@ class DanmakuClient(private val context: Context) {
                 }
             }
             
-            val titlePatterns = listOf(
-                Regex(""""title":\s*"([^"]+)","count_map""""),
-                Regex(""""live_room_title":\s*"([^"]+)""""),
-                Regex("""title\\":\\"([^"\\]+)\\""")
-            )
-            for (pattern in titlePatterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    title = match.groupValues[1]
-                    break
+            val roomStrMatch = Regex(""""room"\s*:\s*\{""").find(html)
+            if (roomStrMatch != null) {
+                val startIndex = roomStrMatch.range.first
+                var braceCount = 0
+                var endIndex = startIndex
+                for (i in startIndex until html.length) {
+                    if (html[i] == '{') braceCount++
+                    else if (html[i] == '}') {
+                        braceCount--
+                        if (braceCount == 0) {
+                            endIndex = i + 1
+                            break
+                        }
+                    }
+                }
+                val roomJson = html.substring(startIndex, endIndex)
+                
+                val titleMatch = Regex(""""title"\s*:\s*"([^"]+)"""").find(roomJson)
+                if (titleMatch != null) {
+                    title = titleMatch.groupValues[1]
+                }
+                
+                val viewerMatch = Regex(""""user_count_str"\s*:\s*"([^"]+)"""").find(roomJson)
+                if (viewerMatch != null) {
+                    viewerCount = parseViewerCount(viewerMatch.groupValues[1])
+                }
+            }
+            
+            if (title.isEmpty()) {
+                val titlePatterns = listOf(
+                    Regex(""""live_room_title"\s*:\s*"([^"]+)""""),
+                    Regex("""live_room_title\\":\\"([^"\\]+)\\""")
+                )
+                for (pattern in titlePatterns) {
+                    val match = pattern.find(html)
+                    if (match != null) {
+                        title = match.groupValues[1]
+                        break
+                    }
                 }
             }
             
@@ -202,16 +231,18 @@ class DanmakuClient(private val context: Context) {
                 }
             }
             
-            val viewerPatterns = listOf(
-                Regex(""""user_count_str":\s*"([^"]+)""""),
-                Regex(""""total":\s*(\d+)"""),
-                Regex("""user_count_str\\":\\"([^"\\]+)\\""")
-            )
-            for (pattern in viewerPatterns) {
-                val match = pattern.find(html)
-                if (match != null) {
-                    viewerCount = parseViewerCount(match.groupValues[1])
-                    if (viewerCount > 0) break
+            if (viewerCount == 0L) {
+                val viewerPatterns = listOf(
+                    Regex(""""online_user_count"\s*:\s*(\d+)"""),
+                    Regex(""""total_user_count"\s*:\s*(\d+)"""),
+                    Regex(""""total"\s*:\s*(\d+)""")
+                )
+                for (pattern in viewerPatterns) {
+                    val match = pattern.find(html)
+                    if (match != null) {
+                        viewerCount = match.groupValues[1].toLongOrNull() ?: 0
+                        if (viewerCount > 0) break
+                    }
                 }
             }
             
