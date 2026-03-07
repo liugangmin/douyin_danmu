@@ -153,19 +153,70 @@ class DanmakuClient(private val context: Context) {
             var anchorName = ""
             var viewerCount: Long = 0
             
-            val titleMatch = Regex(""""title"\s*:\s*"([^"]*)"""").find(html)
-            if (titleMatch != null) {
-                title = titleMatch.groupValues[1]
+            val roomDataMatch = Regex("""room"\s*:\s*\{[^}]*"owner"\s*:\s*\{[^}]*\}[^}]*\}""").find(html)
+            if (roomDataMatch != null) {
+                val roomData = roomDataMatch.value
+                
+                val nicknameMatch = Regex(""""nickname"\s*:\s*"([^"]*)"""").find(roomData)
+                if (nicknameMatch != null) {
+                    anchorName = nicknameMatch.groupValues[1]
+                }
             }
             
-            val anchorMatch = Regex(""""nickname"\s*:\s*"([^"]*)"""").find(html)
-            if (anchorMatch != null) {
-                anchorName = anchorMatch.groupValues[1]
+            if (anchorName.isEmpty()) {
+                val ownerMatch = Regex(""""owner"\s*:\s*\{[^}]*\}""").find(html)
+                if (ownerMatch != null) {
+                    val ownerData = ownerMatch.value
+                    val nicknameMatch = Regex(""""nickname"\s*:\s*"([^"]*)"""").find(ownerData)
+                    if (nicknameMatch != null) {
+                        anchorName = nicknameMatch.groupValues[1]
+                    }
+                }
             }
             
-            val viewerMatch = Regex(""""user_count_str"\s*:\s*"([^"]*)"""").find(html)
-            if (viewerMatch != null) {
-                viewerCount = parseViewerCount(viewerMatch.groupValues[1])
+            if (anchorName.isEmpty()) {
+                val patterns = listOf(
+                    Regex(""""nickname"\s*:\s*"([^"]{1,20})""""),
+                    Regex("""nickname\\":\\"([^"\\]{1,20})\\"""")
+                )
+                for (pattern in patterns) {
+                    val matches = pattern.findAll(html).toList()
+                    if (matches.isNotEmpty()) {
+                        anchorName = matches.first().groupValues[1]
+                        break
+                    }
+                }
+            }
+            
+            val titlePatterns = listOf(
+                Regex(""""live_room_title"\s*:\s*"([^"]*)""""),
+                Regex("""live_room_title\\":\\"([^"]*)\\"""")
+            )
+            for (pattern in titlePatterns) {
+                val match = pattern.find(html)
+                if (match != null) {
+                    title = match.groupValues[1]
+                    break
+                }
+            }
+            
+            if (title.isEmpty()) {
+                val titleMatch = Regex("""<title>([^<]*)</title>""").find(html)
+                if (titleMatch != null) {
+                    title = titleMatch.groupValues[1].replace(" - 抖音直播", "").trim()
+                }
+            }
+            
+            val viewerPatterns = listOf(
+                Regex(""""user_count_str"\s*:\s*"([^"]*)""""),
+                Regex("""user_count_str\\":\\"([^"]*)\\"""")
+            )
+            for (pattern in viewerPatterns) {
+                val match = pattern.find(html)
+                if (match != null) {
+                    viewerCount = parseViewerCount(match.groupValues[1])
+                    break
+                }
             }
             
             Log.d(TAG, "获取房间信息 - 主播: $anchorName, 标题: $title, 人数: $viewerCount")
