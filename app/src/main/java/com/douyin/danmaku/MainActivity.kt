@@ -1,6 +1,7 @@
 package com.douyin.danmaku
 
 import android.os.Bundle
+import android.view.View
 import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -44,6 +45,10 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
+        binding.btnDisconnect.setOnClickListener {
+            disconnect()
+        }
+        
         updateUI()
     }
     
@@ -52,7 +57,9 @@ class MainActivity : AppCompatActivity() {
             setOnDanmakuCallback { message ->
                 runOnUiThread {
                     val position = adapter.addMessage(message)
-                    binding.rvDanmaku.scrollToPosition(position)
+                    if (position >= 0) {
+                        binding.rvDanmaku.scrollToPosition(position)
+                    }
                 }
             }
             
@@ -83,6 +90,37 @@ class MainActivity : AppCompatActivity() {
                     updateUI()
                 }
             }
+            
+            setOnRoomInfoCallback { roomInfo ->
+                runOnUiThread {
+                    showRoomInfo(roomInfo)
+                }
+            }
+        }
+    }
+    
+    private fun showRoomInfo(roomInfo: com.douyin.danmaku.model.RoomInfo) {
+        binding.inputArea.visibility = View.GONE
+        binding.roomInfoArea.visibility = View.VISIBLE
+        
+        binding.tvAnchorName.text = roomInfo.anchorName.ifEmpty { "主播" }
+        
+        val viewerText = formatViewerCount(roomInfo.viewerCount)
+        binding.tvViewerCount.text = viewerText
+        
+        binding.tvRoomTitle.text = roomInfo.title.ifEmpty { "直播间" }
+    }
+    
+    private fun hideRoomInfo() {
+        binding.inputArea.visibility = View.VISIBLE
+        binding.roomInfoArea.visibility = View.GONE
+    }
+    
+    private fun formatViewerCount(count: Long): String {
+        return when {
+            count >= 10000 -> String.format("%.1f万", count / 10000.0)
+            count >= 1000 -> String.format("%.1f千", count / 1000.0)
+            else -> count.toString()
         }
     }
     
@@ -112,6 +150,7 @@ class MainActivity : AppCompatActivity() {
         isConnecting = false
         adapter.clear()
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        hideRoomInfo()
         updateUI()
         Toast.makeText(this, "已断开连接", Toast.LENGTH_SHORT).show()
     }
@@ -135,22 +174,16 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun updateUI() {
-        // 更新按钮文字
-        binding.btnConnect.text = if (isConnected) {
-            getString(R.string.disconnect)
-        } else {
-            getString(R.string.connect)
-        }
+        binding.btnConnect.text = getString(R.string.connect)
         
-        // 更新状态文字
         binding.tvStatus.text = when {
             isConnecting -> getString(R.string.connecting)
             isConnected -> getString(R.string.connected)
             else -> getString(R.string.disconnected)
         }
         
-        // 输入框在连接时禁用
         binding.etRoomId.isEnabled = !isConnected && !isConnecting
+        binding.btnConnect.isEnabled = !isConnected && !isConnecting
     }
     
     override fun onDestroy() {

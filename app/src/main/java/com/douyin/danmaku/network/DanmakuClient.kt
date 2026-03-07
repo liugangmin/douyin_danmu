@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.model.DanmakuType
+import com.douyin.danmaku.model.RoomInfo
 import com.douyin.danmaku.proto.*
 import com.douyin.danmaku.utils.SignatureGenerator
 import kotlinx.coroutines.Dispatchers
@@ -38,10 +39,12 @@ class DanmakuClient(private val context: Context) {
     private var onConnectedCallback: (() -> Unit)? = null
     private var onDisconnectedCallback: (() -> Unit)? = null
     private var onErrorCallback: ((String) -> Unit)? = null
+    private var onRoomInfoCallback: ((RoomInfo) -> Unit)? = null
     
     private var ttwid: String? = null
     private var roomId: String? = null
     private var signatureGenerator: SignatureGenerator? = null
+    private var currentRoomInfo: RoomInfo? = null
     
     suspend fun connect(webRoomId: String) {
         withContext(Dispatchers.IO) {
@@ -118,18 +121,75 @@ class DanmakuClient(private val context: Context) {
                 .build()
             val response = client.newCall(request).execute()
             val html = response.body?.string() ?: return null
+            
+            var roomId: String? = null
             val patterns = listOf(
                 Regex("""roomId\\":\\"(\d+)\\""""),
                 Regex(""""roomId":\s*"?(\d+)"?""")
             )
             for (pattern in patterns) {
                 val match = pattern.find(html)
-                if (match != null) return match.groupValues[1]
+                if (match != null) {
+                    roomId = match.groupValues[1]
+                    break
+                }
             }
-            null
+            
+            if (roomId != null) {
+                var title = ""
+                var anchorName = ""
+                var viewerCount: Long = 0
+                
+                val titleMatch = Regex(""""title"\s*:\s*"([^"]*)"""").find(html)
+                if (titleMatch != null) {
+                    title = titleMatch.groupValues[1]
+                }
+                
+                val anchorMatch = Regex(""""nickname"\s*:\s*"([^"]*)"""").find(html)
+                if (anchorMatch != null) {
+                    anchorName = anchorMatch.groupValues[1]
+                }
+                
+                val viewerMatch = Regex(""""user_count_str"\s*:\s*"([^"]*)"""").find(html)
+                if (viewerMatch != null) {
+                    viewerCount = parseViewerCount(viewerMatch.groupValues[1])
+                }
+                
+                currentRoomInfo = RoomInfo(
+                    roomId = roomId,
+                    webRoomId = webRoomId,
+                    title = title,
+                    anchorName = anchorName,
+                    viewerCount = viewerCount
+                )
+                
+                handler.post {
+                    currentRoomInfo?.let { onRoomInfoCallback?.invoke(it) }
+                }
+            }
+            
+            roomId
         } catch (e: Exception) {
             Log.e(TAG, "获取roomId失败", e)
             null
+        }
+    }
+    
+    private fun parseViewerCount(countStr: String): Long {
+        return try {
+            when {
+                countStr.contains("万") -> {
+                    val num = countStr.replace("万", "").toDouble()
+                    (num * 10000).toLong()
+                }
+                countStr.contains("w", ignoreCase = true) -> {
+                    val num = countStr.replace("w", "").replace("W", "").toDouble()
+                    (num * 10000).toLong()
+                }
+                else -> countStr.toLongOrNull() ?: 0
+            }
+        } catch (e: Exception) {
+            0
         }
     }
     
@@ -337,6 +397,7 @@ class DanmakuClient(private val context: Context) {
         isConnected.set(false)
         signatureGenerator?.destroy()
         signatureGenerator = null
+        currentRoomInfo = null
     }
     
     fun setOnDanmakuCallback(callback: (DanmakuMessage) -> Unit) {
@@ -353,5 +414,9 @@ class DanmakuClient(private val context: Context) {
     
     fun setOnErrorCallback(callback: (String) -> Unit) {
         onErrorCallback = callback
+    }
+    
+    fun setOnRoomInfoCallback(callback: (RoomInfo) -> Unit) {
+        onRoomInfoCallback = callback
     }
 }
