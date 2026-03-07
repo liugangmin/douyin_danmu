@@ -9,4 +9,21 @@
     <color name="white">#FFFFFFFF</color>
     <color name="gray">#FF888888</color>
     <color name="light_gray">#FFF5F5F5</color>
+    
+    <color name="primary">#FE2C55</color>
+    <color name="primary_dark">#D42548</color>
+    <color name="background">#0A0A0A</color>
+    <color name="surface">#121212</color>
+    <color name="surface_variant">#1A1A1A</color>
+    <color name="on_surface">#FFFFFF</color>
+    <color name="on_surface_variant">#B3FFFFFF</color>
+    <color name="outline">#2A2A2A</color>
+    
+    <color name="danmaku_chat_name">#2196F3</color>
+    <color name="danmaku_chat_content">#FFFFFF</color>
+    <color name="danmaku_gift">#FFD700</color>
+    <color name="danmaku_enter">#00BCD4</color>
+    <color name="danmaku_follow">#4CAF50</color>
+    <color name="danmaku_fans_club">#FFC107</color>
+    <color name="danmaku_stats">#9C27B0</color>
 </resources>

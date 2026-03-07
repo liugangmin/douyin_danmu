@@ -16,6 +16,9 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
     private val maxSize = 500
     
     fun addMessage(message: DanmakuMessage): Int {
+        if (message.type == DanmakuType.LIKE) {
+            return -1
+        }
         items.add(message)
         if (items.size > maxSize) {
             items.removeAt(0)
@@ -50,21 +53,49 @@ class DanmakuAdapter : RecyclerView.Adapter<DanmakuAdapter.DanmakuViewHolder>() 
     
     class DanmakuViewHolder(private val binding: ItemDanmakuBinding) : RecyclerView.ViewHolder(binding.root) {
         fun bind(message: DanmakuMessage) {
-            binding.tvNickname.text = message.nickname
-            binding.tvContent.text = message.content
+            val context = binding.root.context
             
-            // 根据消息类型设置不同颜色（适合黑色背景）
-            val color = when (message.type) {
-                DanmakuType.CHAT -> 0xFFFFFFFF.toInt() // 白色
-                DanmakuType.GIFT -> 0xFFFFD700.toInt() // 金色
-                DanmakuType.ENTER -> 0xFF00BCD4.toInt() // 青色
-                DanmakuType.LIKE -> 0xFFFF69B4.toInt() // 粉色
-                DanmakuType.FOLLOW -> 0xFF4CAF50.toInt() // 绿色
-                DanmakuType.FANS_CLUB -> 0xFFFFC107.toInt() // 黄色
-                DanmakuType.STATS -> 0xFF9C27B0.toInt() // 紫色
+            when (message.type) {
+                DanmakuType.CHAT -> {
+                    binding.tvNickname.text = "${message.nickname}："
+                    binding.tvNickname.setTextColor(0xFF2196F3.toInt())
+                    binding.tvContent.text = message.content
+                    binding.tvContent.setTextColor(0xFFFFFFFF.toInt())
+                }
+                DanmakuType.GIFT -> {
+                    binding.tvNickname.text = message.nickname
+                    binding.tvNickname.setTextColor(0xFFFFD700.toInt())
+                    binding.tvContent.text = " ${message.content}"
+                    binding.tvContent.setTextColor(0xFFFFD700.toInt())
+                }
+                DanmakuType.ENTER -> {
+                    binding.tvNickname.text = message.nickname
+                    binding.tvNickname.setTextColor(0xFF00BCD4.toInt())
+                    binding.tvContent.text = " ${message.content}"
+                    binding.tvContent.setTextColor(0xFF00BCD4.toInt())
+                }
+                DanmakuType.FOLLOW -> {
+                    binding.tvNickname.text = message.nickname
+                    binding.tvNickname.setTextColor(0xFF4CAF50.toInt())
+                    binding.tvContent.text = " ${message.content}"
+                    binding.tvContent.setTextColor(0xFF4CAF50.toInt())
+                }
+                DanmakuType.FANS_CLUB -> {
+                    binding.tvNickname.text = message.nickname
+                    binding.tvNickname.setTextColor(0xFFFFC107.toInt())
+                    binding.tvContent.text = " ${message.content}"
+                    binding.tvContent.setTextColor(0xFFFFC107.toInt())
+                }
+                DanmakuType.STATS -> {
+                    binding.tvNickname.text = ""
+                    binding.tvContent.text = message.content
+                    binding.tvContent.setTextColor(0xFF9C27B0.toInt())
+                }
+                DanmakuType.LIKE -> {
+                    binding.tvNickname.text = ""
+                    binding.tvContent.text = ""
+                }
             }
-            
-            binding.tvNickname.setTextColor(color)
         }
     }
 }
