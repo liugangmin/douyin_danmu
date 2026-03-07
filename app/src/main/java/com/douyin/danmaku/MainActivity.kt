@@ -110,17 +110,12 @@ class MainActivity : AppCompatActivity() {
         binding.inputArea.visibility = View.GONE
         binding.roomInfoArea.visibility = View.VISIBLE
         
-        binding.tvAnchorName.text = roomInfo.anchorName.ifEmpty { "主播" }
+        val anchorName = roomInfo.anchorName.ifEmpty { "主播" }
+        binding.tvAnchorName.text = "主播：$anchorName"
+        binding.tvAnchorName.setTextColor(0xFFFE2C55.toInt())
         
         currentViewerCount = roomInfo.viewerCount
         binding.tvViewerCount.text = formatViewerCount(currentViewerCount)
-        
-        if (roomInfo.title.isNotEmpty()) {
-            binding.tvRoomTitle.text = roomInfo.title
-            binding.tvRoomTitle.visibility = View.VISIBLE
-        } else {
-            binding.tvRoomTitle.visibility = View.GONE
-        }
     }
     
     private fun updateViewerCount(count: Long) {

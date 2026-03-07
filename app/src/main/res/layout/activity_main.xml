@@ -161,16 +161,6 @@
                 android:layout_height="1dp"
                 android:layout_weight="1" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/tvRoomTitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:ellipsize="end"
-            android:maxLines="1"
-            android:textColor="#666666"
-            android:textSize="11sp" />
     </LinearLayout>
 
     <androidx.constraintlayout.widget.Barrier
