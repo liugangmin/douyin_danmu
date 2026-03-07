@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.douyin.danmaku.model.DanmakuMessage
 import com.douyin.danmaku.model.DanmakuType
+import com.douyin.danmaku.model.EmojiInfo
 import com.douyin.danmaku.model.RoomInfo
 import com.douyin.danmaku.proto.*
 import com.douyin.danmaku.utils.SignatureGenerator
