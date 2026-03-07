@@ -2,6 +2,7 @@ package com.douyin.danmaku
 
 import android.os.Bundle
 import android.view.View
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -54,6 +55,8 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     isConnected = true
                     updateConnectionStatus(true, false)
+                    // 保持屏幕常亮
+                    window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                     Toast.makeText(this@MainActivity, "连接成功", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -62,6 +65,8 @@ class MainActivity : AppCompatActivity() {
                 runOnUiThread {
                     isConnected = false
                     updateConnectionStatus(false, false)
+                    // 取消屏幕常亮
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 }
             }
             
@@ -122,6 +127,8 @@ class MainActivity : AppCompatActivity() {
         updateConnectionStatus(false, false)
         adapter.clear()
         binding.roomInfoArea.visibility = View.GONE
+        // 取消屏幕常亮
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         Toast.makeText(this, "已断开连接", Toast.LENGTH_SHORT).show()
     }
     
@@ -139,5 +146,6 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         danmakuClient?.disconnect()
+        window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 }

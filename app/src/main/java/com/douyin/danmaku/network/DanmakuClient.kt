@@ -268,10 +268,9 @@ class DanmakuClient(private val context: Context) {
                     when {
                         method.contains("ChatMessage") -> parseChatMessage(msg.payload.toByteArray())
                         method.contains("GiftMessage") -> parseGiftMessage(msg.payload.toByteArray())
-                        method.contains("MemberMessage") -> parseMemberMessage(msg.payload.toByteArray())
                         method.contains("LikeMessage") -> parseLikeMessage(msg.payload.toByteArray())
                         method.contains("SocialMessage") -> parseSocialMessage(msg.payload.toByteArray())
-                        else -> {} // 忽略其他消息类型
+                        else -> {} // 忽略其他消息类型（包括MemberMessage进场消息）
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "解析 $method 失败", e)
@@ -303,17 +302,6 @@ class DanmakuClient(private val context: Context) {
             type = DanmakuType.GIFT,
             nickname = user.nickName,
             content = "送出了 $giftName x${msg.comboCount}",
-            userId = user.id.toString()
-        ))
-    }
-    
-    private fun parseMemberMessage(data: ByteArray) {
-        val msg = MemberMessage.parseFrom(data)
-        val user = msg.user ?: return
-        onDanmakuCallback?.invoke(DanmakuMessage(
-            type = DanmakuType.ENTER,
-            nickname = user.nickName,
-            content = "进入了直播间",
             userId = user.id.toString()
         ))
     }
