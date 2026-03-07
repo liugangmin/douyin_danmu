@@ -153,44 +153,36 @@ class DanmakuClient(private val context: Context) {
             var anchorName = ""
             var viewerCount: Long = 0
             
-            val roomDataMatch = Regex("""room"\s*:\s*\{[^}]*"owner"\s*:\s*\{[^}]*\}[^}]*\}""").find(html)
-            if (roomDataMatch != null) {
-                val roomData = roomDataMatch.value
-                
-                val nicknameMatch = Regex(""""nickname"\s*:\s*"([^"]*)"""").find(roomData)
-                if (nicknameMatch != null) {
-                    anchorName = nicknameMatch.groupValues[1]
+            val ownerStrPatterns = listOf(
+                Regex(""""owner":\s*\{[^}]*"nickname":\s*"([^"]+)"[^}]*\}"""),
+                Regex("""owner\\":\{[^}]*nickname\\":\\"([^"\\]+)[^}]*\}""")
+            )
+            for (pattern in ownerStrPatterns) {
+                val match = pattern.find(html)
+                if (match != null) {
+                    anchorName = match.groupValues[1]
+                    break
                 }
             }
             
             if (anchorName.isEmpty()) {
-                val ownerMatch = Regex(""""owner"\s*:\s*\{[^}]*\}""").find(html)
-                if (ownerMatch != null) {
-                    val ownerData = ownerMatch.value
-                    val nicknameMatch = Regex(""""nickname"\s*:\s*"([^"]*)"""").find(ownerData)
-                    if (nicknameMatch != null) {
-                        anchorName = nicknameMatch.groupValues[1]
-                    }
+                val streamerMatch = Regex(""""streamer":\s*\{[^}]*"nickname":\s*"([^"]+)"[^}]*\}""").find(html)
+                if (streamerMatch != null) {
+                    anchorName = streamerMatch.groupValues[1]
                 }
             }
             
             if (anchorName.isEmpty()) {
-                val patterns = listOf(
-                    Regex(""""nickname"\s*:\s*"([^"]{1,20})""""),
-                    Regex("""nickname\\":\\"([^"\\]{1,20})\\"""")
-                )
-                for (pattern in patterns) {
-                    val matches = pattern.findAll(html).toList()
-                    if (matches.isNotEmpty()) {
-                        anchorName = matches.first().groupValues[1]
-                        break
-                    }
+                val roomInfoMatch = Regex(""""room"\s*:\s*\{[^}]*"owner"\s*:\s*\{[^}]*"nickname"\s*:\s*"([^"]+)"[^}]*\}[^}]*\}""").find(html)
+                if (roomInfoMatch != null) {
+                    anchorName = roomInfoMatch.groupValues[1]
                 }
             }
             
             val titlePatterns = listOf(
-                Regex(""""live_room_title"\s*:\s*"([^"]*)""""),
-                Regex("""live_room_title\\":\\"([^"]*)\\"""")
+                Regex(""""title":\s*"([^"]+)","count_map""""),
+                Regex(""""live_room_title":\s*"([^"]+)""""),
+                Regex("""title\\":\\"([^"\\]+)\\""")
             )
             for (pattern in titlePatterns) {
                 val match = pattern.find(html)
@@ -201,21 +193,25 @@ class DanmakuClient(private val context: Context) {
             }
             
             if (title.isEmpty()) {
-                val titleMatch = Regex("""<title>([^<]*)</title>""").find(html)
+                val titleMatch = Regex("""<title>([^<]+)</title>""").find(html)
                 if (titleMatch != null) {
-                    title = titleMatch.groupValues[1].replace(" - 抖音直播", "").trim()
+                    title = titleMatch.groupValues[1]
+                        .replace(" - 抖音直播", "")
+                        .replace(" - 字节跳动", "")
+                        .trim()
                 }
             }
             
             val viewerPatterns = listOf(
-                Regex(""""user_count_str"\s*:\s*"([^"]*)""""),
-                Regex("""user_count_str\\":\\"([^"]*)\\"""")
+                Regex(""""user_count_str":\s*"([^"]+)""""),
+                Regex(""""total":\s*(\d+)"""),
+                Regex("""user_count_str\\":\\"([^"\\]+)\\""")
             )
             for (pattern in viewerPatterns) {
                 val match = pattern.find(html)
                 if (match != null) {
                     viewerCount = parseViewerCount(match.groupValues[1])
-                    break
+                    if (viewerCount > 0) break
                 }
             }
             

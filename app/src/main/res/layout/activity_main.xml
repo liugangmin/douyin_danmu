@@ -87,12 +87,12 @@
         <Button
             android:id="@+id/btnConnect"
             android:layout_width="wrap_content"
-            android:layout_height="32dp"
+            android:layout_height="34dp"
             android:layout_marginStart="8dp"
             android:background="@drawable/bg_button"
-            android:minWidth="56dp"
-            android:paddingStart="16dp"
-            android:paddingEnd="16dp"
+            android:minWidth="60dp"
+            android:paddingStart="18dp"
+            android:paddingEnd="18dp"
             android:text="@string/connect"
             android:textColor="@color/white"
             android:textSize="12sp" />
