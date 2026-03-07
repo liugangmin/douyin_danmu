@@ -412,9 +412,30 @@ class DanmakuClient(private val context: Context) {
         val msg = ChatMessage.parseFrom(data)
         val user = msg.user ?: return
         if (msg.content.isNotEmpty()) {
-            val emojis = msg.emojisList.map { emoji ->
-                EmojiInfo(text = emoji.text, url = emoji.url)
+            val emojis = mutableListOf<EmojiInfo>()
+            
+            msg.emojisList.forEach { emoji ->
+                if (emoji.text.isNotEmpty() && emoji.url.isNotEmpty()) {
+                    emojis.add(EmojiInfo(text = emoji.text, url = emoji.url))
+                }
             }
+            
+            msg.emojiImagesList.forEach { emojiImage ->
+                val text = if (emojiImage.text.isNotEmpty()) emojiImage.text else emojiImage.emoji
+                if (text.isNotEmpty() && emojiImage.url.isNotEmpty()) {
+                    emojis.add(EmojiInfo(text = text, url = emojiImage.url))
+                }
+            }
+            
+            msg.textFormatsList.forEach { textFormat ->
+                textFormat.emojiImage?.let { emojiImage ->
+                    val text = if (emojiImage.text.isNotEmpty()) emojiImage.text else emojiImage.emoji
+                    if (text.isNotEmpty() && emojiImage.url.isNotEmpty()) {
+                        emojis.add(EmojiInfo(text = text, url = emojiImage.url))
+                    }
+                }
+            }
+            
             onDanmakuCallback?.invoke(DanmakuMessage(
                 type = DanmakuType.CHAT,
                 nickname = user.nickName,

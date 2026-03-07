@@ -34,11 +34,26 @@ message ChatMessage {
   User user = 2;
   string content = 3;
   repeated Emoji emojis = 4;
+  repeated EmojiImage emojiImages = 5;
+  repeated TextFormat textFormats = 6;
 }
 
 message Emoji {
   string text = 1;
   string url = 2;
+}
+
+message EmojiImage {
+  string text = 1;
+  string url = 2;
+  string emoji = 3;
+}
+
+message TextFormat {
+  int32 start = 1;
+  int32 end = 2;
+  string color = 3;
+  EmojiImage emojiImage = 4;
 }
 
 message GiftMessage {
